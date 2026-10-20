@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#102d26" />
+  <meta name="description" content="Офлайн-платформа скаутинга и анализа альянсов FTC BIOBUZZ." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>BioBuzz Alliance Matrix</title>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#overview" aria-label="BioBuzz Alliance Matrix">
+        <span class="brand-mark">B</span>
+        <span class="brand-copy"><strong>BioBuzz</strong><small>Alliance Matrix</small></span>
+      </a>
+      <div class="event-switcher">
+        <span class="eyebrow">АКТИВНЫЙ СЕЗОН</span>
+        <strong>BIOBUZZ <span class="season-tag">26/27</span></strong>
+        <small id="eventLabel">Демо-турнир · учебные данные</small>
+      </div>
+      <nav class="main-nav" aria-label="Основная навигация">
+        <span class="nav-section">РАБОЧЕЕ МЕСТО</span>
+        <button class="nav-item active" data-page="overview"><span class="nav-icon">01</span>Обзор</button>
+        <button class="nav-item" data-page="scouting"><span class="nav-icon">02</span>Скаутинг</button>
+        <button class="nav-item" data-page="teams"><span class="nav-icon">03</span>Команды</button>
+        <button class="nav-item" data-page="analysis"><span class="nav-icon">04</span>Анализ альянса</button>
+        <button class="nav-item" data-page="draft"><span class="nav-icon">05</span>Доска драфта</button>
+        <span class="nav-section nav-section-lower">ДАННЫЕ</span>
+        <button class="nav-item" data-page="data"><span class="nav-icon">06</span>Импорт и экспорт</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="offline-indicator"><i></i><span>Локальный режим</span></div>
+        <div class="sidebar-foot">BIOBUZZ · модель очков TU05<br><span>Данные остаются в этом браузере</span></div>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">B</span><strong>BioBuzz Matrix</strong></div>
+        <div class="breadcrumb"><span>FTC / BIOBUZZ</span><b>/</b><strong id="pageCrumb">Обзор</strong></div>
+        <div class="topbar-right">
+          <span class="sync-pill"><i></i><span id="syncStatus">Сохранено локально</span></span>
+          <button class="button button-primary button-small" data-action="go-scout"><span class="plus">+</span> Новое наблюдение</button>
+        </div>
+      </header>
+      <main id="main" tabindex="-1"></main>
+      <footer class="app-footer">
+        <span>BioBuzz Alliance Matrix <span class="dot-sep">·</span> учебный прототип для FTC</span>
+        <span>Модель не заменяет официальный счёт и решение капитана</span>
+      </footer>
+    </div>
+  </div>
+  <div id="modalRoot"></div>
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
+
