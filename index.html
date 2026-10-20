@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="VITE: BioBuzz Alliance Matrix — локальная платформа скаутинга и анализа альянсов FTC BIOBUZZ." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>VITE · BioBuzz Alliance Matrix</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <div class="spectral-grid" aria-hidden="true"></div>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#overview" aria-label="VITE, перейти к обзору">
+        <span class="brand-mark" aria-hidden="true"><small>V</small><b>VT</b><i></i></span>
+        <span class="brand-copy"><strong>VITE</strong><small>BioBuzz Alliance Matrix</small></span>
+      </a>
+      <div class="event-switcher">
+        <span class="eyebrow">VITE / ACTIVE SEASON</span>
+        <strong>BIOBUZZ <span class="season-tag">26/27</span></strong>
+        <small id="eventLabel">Демо-турнир · учебные данные</small>
+      </div>
+      <nav class="main-nav" aria-label="Основная навигация">
+        <span class="nav-section">РАБОЧЕЕ МЕСТО</span>
+        <button class="nav-item active" data-page="overview"><span class="nav-icon">01</span>Обзор</button>
+        <button class="nav-item" data-page="scouting"><span class="nav-icon">02</span>Скаутинг</button>
+        <button class="nav-item" data-page="teams"><span class="nav-icon">03</span>Команды</button>
+        <button class="nav-item" data-page="analysis"><span class="nav-icon">04</span>Анализ альянса</button>
+        <button class="nav-item" data-page="draft"><span class="nav-icon">05</span>Доска драфта</button>
+        <span class="nav-section nav-section-lower">ДАННЫЕ</span>
+        <button class="nav-item" data-page="data"><span class="nav-icon">06</span>Импорт и экспорт</button>
+        <button class="nav-item" data-page="trust"><span class="nav-icon">07</span>Данные и доверие</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="offline-indicator"><i></i><span>Локальный режим</span></div>
+        <div class="sidebar-foot">VITE · BIOBUZZ TU05<br><span>Данные остаются в этом браузере</span></div>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark" aria-hidden="true"><small>V</small><b>VT</b></span><strong>VITE</strong></div>
+        <div class="breadcrumb"><span>VITE / BIOBUZZ</span><b>/</b><strong id="pageCrumb">Обзор</strong></div>
+        <div class="topbar-right">
+          <span class="sync-pill"><i></i><span id="syncStatus">Сохранено локально</span></span>
+          <button class="button button-primary button-small" data-action="go-scout"><span class="plus">+</span> Новое наблюдение</button>
+        </div>
+      </header>
+      <main id="main" tabindex="-1"></main>
+      <footer class="app-footer">
+        <span>VITE <span class="dot-sep">·</span> локальный некоммерческий инструмент</span>
+        <span class="footer-actions"><button class="footer-link" data-page="trust">Данные и условия</button><button class="footer-link" data-action="open-cookie-settings">Настройки хранения</button></span>
+      </footer>
+    </div>
+  </div>
+  <section class="cookie-banner" id="cookieBanner" aria-label="Настройки локального хранения" hidden>
+    <div>
+      <span class="eyebrow">КОНТРОЛЬ ДАННЫХ</span>
+      <h2>Никакой рекламы. Никаких трекеров.</h2>
+      <p>VITE не использует рекламные cookie или сторонние аналитические SDK. Браузерное хранилище нужно только для сохранения скаутинга на этом устройстве.</p>
+    </div>
+    <div class="cookie-actions">
+      <button class="button button-secondary" data-action="cookie-necessary">Только необходимое</button>
+      <button class="button button-primary" data-action="cookie-accept">Разрешить хранение</button>
+      <button class="footer-link" data-page="trust">Подробнее</button>
+    </div>
+  </section>
+  <div id="modalRoot"></div>
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
+

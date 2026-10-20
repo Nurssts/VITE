@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: #000;
+}
+
+*:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -40px;
+  z-index: 80;
+  background: #fff;
+  color: #000;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+.chart-note {
+  @apply mt-2 text-[11px] leading-relaxed text-zinc-500;
+}
+
+.print-root {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-root,
+  .print-root * {
+    visibility: visible;
+  }
+  .print-root {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    color: #000;
+    padding: 24px;
+  }
+}

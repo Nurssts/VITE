@@ -1,2 +1,70 @@
-# VITE
-VITE is an advanced analytics hub and alliance draft simulator for FIRST Tech Challenge (FTC) teams during the Biobuzz season.
+# VITE · BioBuzz Alliance Matrix
+
+Интеллектуальный хаб скаутинга и драфта альянсов для сезона FTC BIOBUZZ: роли Hive / Flower, Autonomous Collision Check, Monte-Carlo и доска драфта. Интерфейс монохромный, mobile-first, без рекламы и скрытых платежей.
+
+## Стек
+
+- Frontend: React + Vite + Tailwind CSS + Lucide + Recharts
+- Backend: FastAPI (синергия, симуляции, прокси FIRST Events API и The Orange Alliance)
+- Хранение: localStorage + IndexedDB на устройстве, опционально SQLite-кэш симуляций
+
+## Быстрый запуск
+
+### Только интерфейс (Vite)
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Откройте `http://127.0.0.1:5173`. Демо-скаутинг работает без сервера.
+
+### Полный стек (API + собранный UI)
+
+```powershell
+cd frontend
+npm install
+npm run build
+cd ..
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn server:app --host 127.0.0.1 --port 8000
+```
+
+Откройте `http://127.0.0.1:8000`.
+
+### Официальные данные
+
+Ключи **только** в окружении процесса, не в браузере:
+
+```powershell
+$env:FTC_API_USERNAME = "ваш-логин"
+$env:FTC_API_TOKEN = "ваш-токен"
+$env:TOA_API_KEY = "ключ-toa"   # необязательно
+```
+
+FIRST просит ссылаться на API и запрещает коммерческое использование его данных: [регистрация](https://ftc-events.firstinspires.org/services/API/register). TOA: [документация](https://theorangealliance.org/apidocs).
+
+## Модули
+
+1. Ручной скаутинг и CSV (циклы Pollen/Nectar, Hive success, Flowers, парковка, траектория автонома).
+2. Индекс синергии: покрытие профилей + комплиментарность Hive/Flower − DNF − collision.
+3. Monte-Carlo ≥1000 итераций, 95% интервал, текстовые узкие места.
+4. Live draft: лучший синергетический пик и denial pick.
+5. Engineering Notebook: печать в системный PDF для судей.
+
+Учебный набор из 12 команд явно помечен. Фейковых отзывов и неподтверждённых процентов нет.
+
+## Модель и границы
+
+Модель собрана по BIOBUZZ Competition Manual TU05 (15.10.2026). Это оценка наблюдаемого вклада робота, не официальный счёт альянса. Защита, конкуренция за элементы и решения судей моделируются не полностью.
+
+## Правовое
+
+В приложении: Privacy Policy, Terms, Refund Policy (платежей внутри продукта нет), Cookie banner без тёмных паттернов, перечень SDK, возрастное согласие 13+/наставник, удаление всех локальных данных.
+
+## Горячие клавиши
+
+`1`–`9` — разделы, `Tab` — фокус, `Esc` — закрыть диалоги.
