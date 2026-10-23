@@ -40,20 +40,20 @@ export default function Overview({ db, setPage }) {
         <Panel>
           <div className="mb-3 flex items-start justify-between">
             <div>
-              <h2 className="text-sm font-semibold">Команды по оценке вклада</h2>
+              <h2 className="text-sm font-semibold text-zinc-900">Команды по оценке вклада</h2>
               <p className="text-[11px] text-zinc-500">Среднее модельное значение по матчевым записям</p>
             </div>
-            <span className="rounded-full border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">{MODEL_VERSION}</span>
+            <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] text-zinc-500 bg-zinc-50">{MODEL_VERSION}</span>
           </div>
           {chart.length ? (
             <div className="h-56" role="img" aria-label="Столбчатый график средней модельной оценки команд">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chart} layout="vertical" margin={{ left: 16, right: 12 }}>
-                  <CartesianGrid stroke="#27272a" horizontal={false} />
-                  <XAxis type="number" stroke="#71717a" fontSize={11} />
-                  <YAxis type="category" dataKey="name" stroke="#71717a" fontSize={11} width={56} />
-                  <Tooltip contentStyle={{ background: "#09090b", border: "1px solid #27272a", fontSize: 12 }} />
-                  <Bar dataKey="mean" fill="#ffffff" radius={[0, 4, 4, 0]} name="Оценка" />
+                  <CartesianGrid stroke="#e4e4e7" horizontal={false} />
+                  <XAxis type="number" stroke="#a1a1aa" fontSize={11} />
+                  <YAxis type="category" dataKey="name" stroke="#a1a1aa" fontSize={11} width={56} />
+                  <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #e4e4e7", fontSize: 12 }} />
+                  <Bar dataKey="mean" fill="#000000" radius={[0, 4, 4, 0]} name="Оценка" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

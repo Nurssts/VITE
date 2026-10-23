@@ -60,7 +60,7 @@ export default function Analysis({ db }) {
                 </p>
               ) : null}
             </Panel>
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-6 text-white">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-zinc-900 shadow-sm">
               <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Индекс синергии A1 / A2</div>
               <div className="text-5xl font-semibold tracking-tight">
                 {one ? Math.round(one.score) : "—"}
