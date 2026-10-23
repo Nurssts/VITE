@@ -1,4 +1,4 @@
-"""VITE: BioBuzz Alliance Matrix — local API, FIRST/TOA proxies, math engines.
+"""VITE: BioBuzz Alliance Matrix — local API, FIRST/TOA/FTCScout proxies, math engines.
 
 Credentials stay in process environment. They are never returned to the browser.
 """
@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from engine.db import init_db
+from engine.ftcscout import get_all_teams, get_events, get_match_records, get_team_by_number, get_tep_records
 from engine.monte_carlo import simulate_match
 from engine.scoring import MODEL_VERSION
 from engine.synergy import pair_model, role_label
@@ -167,6 +168,13 @@ async def sdk_inventory() -> dict[str, Any]:
                 "url": "https://theorangealliance.org/apidocs",
                 "required": False,
             },
+            {
+                "name": "FTCScout.org GraphQL API",
+                "purpose": "Public team database, rankings, and match records.",
+                "data": "Public FTC team data and rankings. No authentication required.",
+                "url": "https://ftcscout.org",
+                "required": False,
+            },
         ],
         "notUsed": ["Google Analytics", "advertising SDKs", "session replay", "payment processors"],
         "note": "VITE does not load third-party tracking scripts in the browser. Optional APIs run only from the local Python proxy.",
@@ -255,6 +263,37 @@ async def notebook(body: dict[str, Any]) -> Any:
         "payload": body,
         "disclaimer": "Figures below are computed from the scout database you supplied. Demo rows are labelled as such.",
     }
+
+
+# FTCScout.org API endpoints (public, no auth required)
+@app.get("/api/ftcscout/teams")
+async def ftcscout_teams() -> Any:
+    """Fetch all teams from FTCScout public API."""
+    teams = await get_all_teams()
+    return {"teams": teams, "count": len(teams)}
+
+
+@app.get("/api/ftcscout/team/{number}")
+async def ftcscout_team(number: int) -> Any:
+    """Fetch team details by number from FTCScout."""
+    team = await get_team_by_number(number)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    return team
+
+
+@app.get("/api/ftcscout/events")
+async def ftcscout_events(season: int = Query(2027)) -> Any:
+    """Fetch events for a season from FTCScout."""
+    events = await get_events(season)
+    return {"events": events, "season": season, "count": len(events)}
+
+
+@app.get("/api/ftcscout/rankings")
+async def ftcscout_rankings(season: int = Query(2027), skip: int = Query(0), take: int = Query(100)) -> Any:
+    """Fetch TEP rankings from FTCScout."""
+    records = await get_tep_records(season, skip, take)
+    return {"rankings": records, "season": season, "count": len(records)}
 
 
 if STATIC_DIR.exists():

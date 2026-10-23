@@ -105,7 +105,7 @@ export default function Data({ db, setDb, toast }) {
       <h1 className="text-3xl font-semibold tracking-tight">Импорт и экспорт</h1>
       <p className="mt-1 mb-6 text-sm text-zinc-500">FIRST Events API и TOA работают через локальный прокси. Ключи не вводятся в браузер (кроме кода ивента).</p>
       <DemoBanner demo={db.meta.demo} />
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <Panel>
           <h2 className="text-sm font-semibold">CSV скаутинг</h2>
           <p className="mt-2 text-sm text-zinc-400">Шаблон совместим с прежней версией; добавлены цикл и траектория.</p>
@@ -290,10 +290,55 @@ export default function Data({ db, setDb, toast }) {
             Загрузить матчи TOA
           </Button>
         </Panel>
+        <Panel>
+          <h2 className="text-sm font-semibold">FTCScout.org API</h2>
+          <p className="mt-2 text-sm text-zinc-400">Публичный API команд, рейтингов и матчей. Аутентификация не требуется.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const data = await apiJson("/api/ftcscout/teams");
+                  setOut(`Команд: ${data.count}. Это публичный список команд FTCScout.`);
+                } catch (e) {
+                  toast(e.message, true);
+                }
+              }}
+            >
+              Все команды
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const data = await apiJson("/api/ftcscout/events?season=2027");
+                  setOut(`Ивентов в сезоне 2027: ${data.count}.`);
+                } catch (e) {
+                  toast(e.message, true);
+                }
+              }}
+            >
+              Ивенты 2027
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const data = await apiJson("/api/ftcscout/rankings?season=2027&take=50");
+                  setOut(`Рейтинг TEP: ${data.count} команд в топ-50.`);
+                } catch (e) {
+                  toast(e.message, true);
+                }
+              }}
+            >
+              Рейтинг TEP
+            </Button>
+          </div>
+        </Panel>
       </div>
-      {out ? <p className="mt-4 rounded-xl border border-zinc-800 p-3 text-sm text-zinc-300">{out}</p> : null}
+      {out ? <p className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-600 shadow-sm">{out}</p> : null}
       <Panel className="mt-4">
-        <h2 className="text-sm font-semibold">Настройки турнира</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">Настройки турнира</h2>
         <form
           className="mt-3 grid gap-3 sm:grid-cols-3"
           onSubmit={(e) => {
