@@ -40,8 +40,7 @@
 - **Privacy Policy** ✅
   - Located in `frontend/src/pages/Legal.jsx`
   - Covers data storage (localStorage/IndexedDB)
-  - Explains server-side API key handling
-  - Contact email: team@vite-matrix.local
+  - Explains server-side API key handlin
   - Right to delete documented
 
 - **Terms of Service** ✅
