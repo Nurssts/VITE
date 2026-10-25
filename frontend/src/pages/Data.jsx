@@ -100,6 +100,46 @@ export default function Data({ db, setDb, toast }) {
   const [out, setOut] = useState("");
   const [official, setOfficial] = useState(null);
   const [officialLevel, setOfficialLevel] = useState("qual");
+  const [playedEvents, setPlayedEvents] = useState([]);
+  const [scoutEvent, setScoutEvent] = useState(db.official?.code || "");
+
+  async function findPlayedEvents() {
+    try {
+      const data = await apiJson(`/api/ftcscout/played-events?season=${encodeURIComponent(season)}`);
+      setPlayedEvents(data.events || []);
+      if (!scoutEvent && data.events?.[0]) setScoutEvent(data.events[0].code);
+      toast(`Ивентов с результатами: ${data.count}.`);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+
+  // Official rankings + OPR become db.official; own scouting records are kept and take priority in the model.
+  async function importScoutEvent() {
+    if (!scoutEvent) return;
+    try {
+      const ev = await apiJson(`/api/ftcscout/event/${encodeURIComponent(scoutEvent)}?season=${encodeURIComponent(season)}`);
+      const fresh = db.meta.demo;
+      const teams = fresh ? [] : [...db.teams];
+      ev.teams.forEach((o) => {
+        if (!teams.some((t) => t.number === o.number)) {
+          teams.push({ id: o.number, number: o.number, name: o.name, region: ev.location, style: "FTCScout", notes: "" });
+        }
+      });
+      const captain = teams.find((t) => t.number === ev.teams[0]?.number)?.id || teams[0]?.id || "";
+      setDb({
+        ...db,
+        teams,
+        records: fresh ? [] : db.records,
+        official: ev,
+        meta: { ...db.meta, demo: false, eventName: ev.name, eventCode: ev.code, season: `${ev.season}-${ev.season + 1}` },
+        draft: fresh || !db.draft?.captain ? { captain, picked: [], removed: [] } : db.draft,
+      });
+      toast(`${ev.name}: ${ev.teams.length} команд, ${ev.matchCount} матчей.`);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
 
   async function loadOfficial(kind) {
     if (!code.trim()) {
@@ -378,6 +418,27 @@ export default function Data({ db, setDb, toast }) {
         <Panel>
           <h2 className="text-sm font-semibold">FTCScout.org API</h2>
           <p className="mt-2 text-sm text-zinc-400">Публичный API команд, рейтингов и матчей. Аутентификация не требуется.</p>
+          <div className="mt-3 rounded-xl border border-honey-400/30 bg-honey-900/20 p-3">
+            <div className="text-xs font-medium text-honey-300">Реальный ивент BIOBUZZ · сезон {season}</div>
+            <p className="mt-1 text-xs text-zinc-400">Рейтинг, W-L-T и OPR каждой команды. Учебные данные будут заменены, свой скаутинг сохранится.</p>
+            {playedEvents.length ? (
+              <select className={inputClass("mt-2")} value={scoutEvent} onChange={(e) => setScoutEvent(e.target.value)} aria-label="Ивент FTCScout">
+                {playedEvents.map((e) => (
+                  <option key={e.code} value={e.code}>
+                    {e.code} · {e.name} · {e.location?.city || ""} {e.start}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button variant="secondary" className="px-3 py-2 text-xs" onClick={findPlayedEvents}>
+                Найти ивенты с матчами
+              </Button>
+              <Button className="px-3 py-2 text-xs" disabled={!scoutEvent} onClick={importScoutEvent}>
+                Загрузить ивент
+              </Button>
+            </div>
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
               variant="secondary"

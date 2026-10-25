@@ -132,9 +132,61 @@ export function rowsFor(db, id) {
   return db.records.filter((x) => x.teamId === id && (!db.meta.eventCode || x.eventCode === db.meta.eventCode));
 }
 
+export function officialTeam(db, t) {
+  return t && db.official?.code === db.meta.eventCode ? db.official.teams.find((o) => o.number === t.number) || null : null;
+}
+
+// Without own scouting, a team is modelled from its official OPR (FTCScout): per-robot share of alliance points.
+function oprStats(t, o) {
+  const pos = (x) => Math.max(0, num(x));
+  const auto = pos(o.opr.auto);
+  const hive = pos(o.opr.hive);
+  const flower = pos(o.opr.flower);
+  const field = pos(o.opr.garden) + pos(o.opr.park);
+  const mean = pos(o.opr.total);
+  const spread = Math.max(6, num(o.dev) / 2, mean * 0.2);
+  const consistency = clamp(100 - (spread / Math.max(25, mean || 25)) * 100, 15, 98);
+  return {
+    team: t,
+    records: [],
+    source: "opr",
+    official: o,
+    count: num(o.played),
+    mean,
+    sd: spread,
+    auto,
+    hive,
+    flower,
+    field,
+    autoTips: pos(o.opr.autoHive) / 20,
+    teleopTips: hive / 20,
+    flowerOwned: 0,
+    flowerPlaced: 0,
+    parkRate: clamp(pos(o.opr.park) / 5, 0, 1),
+    dnf: 0,
+    pollenCycle: 0,
+    nectarCycle: 0,
+    hiveSuccess: 0,
+    flowerAccuracy: 0,
+    trajectories: [],
+    confidence: "OPR",
+    consistency,
+    profile: {
+      auto: clamp((auto / 30) * 100, 0, 100),
+      hive: clamp((hive / 60) * 100, 0, 100),
+      flower: clamp((flower / 35) * 100, 0, 100),
+      reliability: clamp(100 - Math.min((spread / Math.max(1, mean)) * 100, 70), 0, 100),
+    },
+  };
+}
+
 export function stats(db, t) {
   if (!t) return null;
   const rs = rowsFor(db, t.id);
+  if (!rs.length) {
+    const o = officialTeam(db, t);
+    if (o) return oprStats(t, o);
+  }
   const bs = rs.map(breakdown);
   const values = bs.map((x) => x.total);
   const count = rs.length;

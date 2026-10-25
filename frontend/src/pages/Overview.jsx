@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, COLORS, DemoBanner, Kpi, PageHeader, Panel, RoleBar } from "../components/ui";
+import { Button, COLORS, DemoBanner, Kpi, PageHeader, Panel, ROLE_COLORS, RoleBar } from "../components/ui";
 import { allStats, avg, fmt, priority, roleLabel } from "../lib/model";
 import { t } from "../lib/i18n";
 
@@ -127,6 +127,13 @@ export default function Overview({ db, setPage, lang = "ru" }) {
     count: s.count,
   }));
   const eyebrow = [db.meta.eventName || t(lang, "event_not_chosen"), db.meta.eventCode || t(lang, "all_code")].join(" · ");
+  const official = db.official?.code === db.meta.eventCode ? db.official : null;
+  const maxOpr = official ? Math.max(1, ...official.teams.map((o) => o.opr.total)) : 1;
+  const oprBar = (v, color) => (
+    <span className="block h-1.5 w-full overflow-hidden rounded-full bg-zinc-800" aria-hidden="true">
+      <span className="block h-full rounded-full" style={{ width: `${Math.max(0, (v / maxOpr) * 100)}%`, background: color }} />
+    </span>
+  );
 
   return (
     <div>
@@ -144,6 +151,68 @@ export default function Overview({ db, setPage, lang = "ru" }) {
       />
 
       <DemoBanner demo={db.meta.demo} lang={lang} />
+      {db.meta.demo ? (
+        <div className="-mt-2 mb-5">
+          <Button variant="secondary" className="text-xs" onClick={() => setPage("data")}>
+            Загрузить реальный ивент BIOBUZZ
+          </Button>
+        </div>
+      ) : null}
+
+      {official ? (
+        <Panel className="mb-4">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+            <h2 className="font-display text-base font-bold text-zinc-50">Официальный рейтинг</h2>
+            <span className="font-mono text-[11px] text-zinc-500">
+              {official.source} · {official.location} · {official.matchCount} матчей · обновлено{" "}
+              {new Date(official.fetchedAt).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <div className="-mx-1 max-h-[560px] overflow-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-zinc-900 text-xs text-zinc-500">
+                <tr>
+                  {["#", "Команда", "W-L-T", "RP", "OPR", "Auto", "Hive", "Flower"].map((h) => (
+                    <th key={h} className="border-b border-zinc-800 py-2.5 pr-4 font-medium">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {official.teams.map((o) => (
+                  <tr key={o.number} className="border-b border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-800/30">
+                    <td className={`py-2.5 pr-4 font-mono text-xs ${o.rank === 1 ? "text-honey-400" : "text-zinc-500"}`}>{o.rank}</td>
+                    <td className="pr-4">
+                      <span className="font-mono font-semibold text-zinc-50">{o.number}</span>
+                      <span className="ml-2 text-zinc-300">{o.name}</span>
+                    </td>
+                    <td className="pr-4 font-mono text-zinc-300">
+                      {o.wins}-{o.losses}-{o.ties}
+                    </td>
+                    <td className="pr-4 font-mono text-zinc-300">{fmt(o.rp, 2)}</td>
+                    <td className="w-40 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-10 font-mono font-medium text-zinc-50">{fmt(o.opr.total)}</span>
+                        {oprBar(o.opr.total, ROLE_COLORS.hive)}
+                      </div>
+                    </td>
+                    {["auto", "hive", "flower"].map((k) => (
+                      <td key={k} className="w-24 pr-4">
+                        <div className="font-mono text-xs text-zinc-300">{fmt(Math.max(0, o.opr[k]))}</div>
+                        {oprBar(o.opr[k], ROLE_COLORS[k])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="chart-note">
+            OPR — вклад одного робота в очки альянса, вычисленный по всем матчам ивента (без штрафов). Пока своего скаутинга нет, синергия и драфт считаются по OPR.
+          </p>
+        </Panel>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <Panel className="comb-bg">
@@ -158,7 +227,7 @@ export default function Overview({ db, setPage, lang = "ru" }) {
           ) : (
             <p className="py-12 text-center text-sm text-zinc-500">{t(lang, "chart_empty")}</p>
           )}
-          <p className="chart-note">{t(lang, "chart_note")}</p>
+          <p className="chart-note">{official && !total ? `Уровень мёда — OPR команды по данным ${official.source}, не официальный счёт FIRST.` : t(lang, "chart_note")}</p>
         </Panel>
 
         <Panel className="flex flex-col">
@@ -196,6 +265,8 @@ export default function Overview({ db, setPage, lang = "ru" }) {
         />
       </div>
 
+      {/* With official data and no own scouting this table would only repeat the OPR ranking above. */}
+      {official && !total ? null : (
       <Panel className="mt-4">
         <h2 className="mb-4 font-display text-base font-bold text-zinc-50">{t(lang, "team_ranking")}</h2>
         <div className="-mx-1 overflow-auto">
@@ -239,6 +310,7 @@ export default function Overview({ db, setPage, lang = "ru" }) {
           </table>
         </div>
       </Panel>
+      )}
     </div>
   );
 }

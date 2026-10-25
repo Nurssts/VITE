@@ -477,6 +477,111 @@ async def ftcscout_rankings(season: int = Query(int(FIRST_SEASON)), skip: int = 
     return {"rankings": records, "season": season, "count": len(records)}
 
 
+FTCSCOUT_GQL = "https://api.ftcscout.org/graphql"
+
+PLAYED_EVENTS_QUERY = """
+query PlayedEvents($season: Int!) {
+  eventsSearch(season: $season, hasMatches: true, limit: 200) {
+    code name start end type location { city country }
+  }
+}
+"""
+
+# BIOBUZZ (2026) team stats. OPR splits each alliance score into per-robot contributions.
+EVENT_2026_QUERY = """
+query EventStats($season: Int!, $code: String!) {
+  eventByCode(season: $season, code: $code) {
+    code name start end location { city country }
+    matches { id }
+    teams {
+      teamNumber
+      team { name }
+      stats {
+        ... on TeamEventStats2026 {
+          rank rp wins losses ties qualMatchesPlayed
+          opr { totalPointsNp autoPoints autoHivePoints dcHivePoints dcFlowerPoints dcGardenPoints dcParkPoints }
+          dev { totalPointsNp }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+async def ftcscout_gql(query: str, variables: dict[str, Any]) -> Any:
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+            response = await client.post(FTCSCOUT_GQL, json={"query": query, "variables": variables})
+        body = response.json()
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="FTCScout request timed out. Local scouting remains available.") from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Could not reach FTCScout.") from exc
+    if response.status_code >= 400 or body.get("errors"):
+        raise HTTPException(status_code=502, detail=f"FTCScout returned an error (status {response.status_code}).")
+    return body["data"]
+
+
+@app.get("/api/ftcscout/played-events")
+async def ftcscout_played_events(season: int = Query(int(FIRST_SEASON))) -> Any:
+    """Events of the season that already have match results, newest first."""
+    data = await ftcscout_gql(PLAYED_EVENTS_QUERY, {"season": season})
+    events = sorted(data.get("eventsSearch") or [], key=lambda e: e.get("start") or "", reverse=True)
+    return {"events": events, "season": season, "count": len(events)}
+
+
+@app.get("/api/ftcscout/event/{code}")
+async def ftcscout_event(code: str, season: int = Query(int(FIRST_SEASON))) -> Any:
+    """Official rankings and OPR breakdown for one BIOBUZZ event."""
+    if season != 2026:
+        raise HTTPException(status_code=422, detail="Event stats are mapped for the BIOBUZZ season (2026) only.")
+    data = await ftcscout_gql(EVENT_2026_QUERY, {"season": season, "code": event_value(code)})
+    event = data.get("eventByCode")
+    if not event:
+        raise HTTPException(status_code=404, detail="Event was not found on FTCScout.")
+    teams = []
+    for entry in event.get("teams") or []:
+        s = entry.get("stats")
+        if not s:
+            continue
+        opr = s["opr"]
+        teams.append({
+            "number": str(entry["teamNumber"]),
+            "name": (entry.get("team") or {}).get("name") or f"Team {entry['teamNumber']}",
+            "rank": s["rank"],
+            "rp": s["rp"],
+            "wins": s["wins"],
+            "losses": s["losses"],
+            "ties": s["ties"],
+            "played": s["qualMatchesPlayed"],
+            "opr": {
+                "total": opr["totalPointsNp"],
+                "auto": opr["autoPoints"],
+                "autoHive": opr["autoHivePoints"],
+                "hive": opr["dcHivePoints"],
+                "flower": opr["dcFlowerPoints"],
+                "garden": opr["dcGardenPoints"],
+                "park": opr["dcParkPoints"],
+            },
+            "dev": s["dev"]["totalPointsNp"],
+        })
+    teams.sort(key=lambda t: t["rank"])
+    location = event.get("location") or {}
+    return {
+        "source": "FTCScout",
+        "season": season,
+        "code": event["code"],
+        "name": event["name"],
+        "start": event.get("start"),
+        "end": event.get("end"),
+        "location": ", ".join(x for x in (location.get("city"), location.get("country")) if x),
+        "matchCount": len(event.get("matches") or []),
+        "teams": teams,
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 if STATIC_DIR.exists():
     # The production build uses the GitHub Pages base path /VITE/, so serve it there as well as at the root.
     app.mount("/VITE", StaticFiles(directory=STATIC_DIR, html=True), name="web-pages")
