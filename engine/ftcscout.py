@@ -11,7 +11,7 @@ from httpx import Client as HTTPClient
 # GraphQL client
 GRAPHQL_URL = "https://api.ftcscout.org/graphql"
 _http_client = HTTPClient()
-_transport = AIOHTTPTransport(url=GRAPHQL_URL, client=_http_client)
+_transport = AIOHTTPTransport(url=GRAPHQL_URL)
 _client = Client(transport=_transport)
 
 
