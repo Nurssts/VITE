@@ -50,6 +50,26 @@ $env:FTC_API_USERNAME = "ваш-логин"
 $env:FTC_API_TOKEN = "ваш-токен"
 ```
 
+Локально ключи можно положить в файл `.env` в корне проекта (образец — `.env.example`, файл в `.gitignore`). Сервер читает его при старте.
+
+Сезон задаётся годом начала: BIOBUZZ 2026-2027 = `2026` (переопределяется `FTC_SEASON`). Документация: [FTC Events API](https://ftc-events.firstinspires.org/api-docs/index.html).
+
+Прокси-эндпойнты (все `GET`, параметры `season`, `event_code`, `team_number`, `tournament_level=qual|playoff`):
+
+| VITE | FIRST v2.0 |
+|---|---|
+| `/api/ftc/season` | `/{season}` |
+| `/api/ftc/events` | `/{season}/events` |
+| `/api/ftc/teams`, `/api/ftc/team` | `/{season}/teams` |
+| `/api/ftc/matches` | `/{season}/matches/{event}` |
+| `/api/ftc/scores` | `/{season}/scores/{event}/{level}` |
+| `/api/ftc/schedule`, `/api/ftc/schedule/hybrid` | `/{season}/schedule/{event}[/{level}/hybrid]` |
+| `/api/ftc/rankings` | `/{season}/rankings/{event}` |
+| `/api/ftc/alliances`, `/api/ftc/alliances/selection` | `/{season}/alliances/{event}[/selection]` |
+| `/api/ftc/awards`, `/api/ftc/awards/list` | `/{season}/awards/...` |
+| `/api/ftc/advancement[/points\|/source]` | `/{season}/advancement/...` |
+| `/api/ftc/leagues[/members\|/rankings]` | `/{season}/leagues/...` |
+
 FIRST просит ссылаться на API и запрещает коммерческое использование его данных: [регистрация](https://ftc-events.firstinspires.org/services/API/register).
 
 ### The Orange Alliance API (опционально)

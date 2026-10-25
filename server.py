@@ -26,10 +26,29 @@ from engine.synergy import pair_model, role_label
 from engine.stats import team_stats
 
 ROOT = Path(__file__).resolve().parent
+
+
+def _load_env_file(path: Path) -> None:
+    """Read KEY=VALUE lines from a local .env (gitignored). Real environment variables win."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file(ROOT / ".env")
+
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 WEB = ROOT / "web"
 STATIC_DIR = FRONTEND_DIST if (FRONTEND_DIST / "index.html").exists() else WEB
 FIRST_API = "https://ftc-api.firstinspires.org/v2.0"
+# FIRST numbers a season by its starting year: BIOBUZZ (2026-2027) is "2026".
+FIRST_SEASON = os.getenv("FTC_SEASON", "2026")
+LEVEL_PATTERN = "^(qual|playoff)$"
 TOA_API = "https://theorangealliance.org/api"
 
 app = FastAPI(title="VITE · BioBuzz Alliance Matrix", version="2.0.0")
@@ -67,13 +86,27 @@ class SimIn(BaseModel):
 
 def season_value(value: str) -> str:
     if not re.fullmatch(r"\d{4}", value):
-        raise HTTPException(status_code=422, detail="Season must be a four-digit FIRST season year, e.g. 2027.")
+        raise HTTPException(status_code=422, detail="Season must be a four-digit FIRST season start year, e.g. 2026 for BIOBUZZ.")
     return value
 
 
 def event_value(value: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9]{3,20}", value):
         raise HTTPException(status_code=422, detail="Event code must be 3-20 letters or digits.")
+    return value.upper()
+
+
+def team_value(value: int | None) -> int | None:
+    if value is None:
+        return None
+    if not 1 <= value <= 999999:
+        raise HTTPException(status_code=422, detail="Team number must be between 1 and 999999.")
+    return value
+
+
+def region_value(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9]{1,20}", value):
+        raise HTTPException(status_code=422, detail="Region and league codes must be 1-20 letters or digits.")
     return value.upper()
 
 
@@ -90,7 +123,8 @@ async def first_get(path: str, params: dict[str, Any] | None = None) -> Any:
         raise HTTPException(status_code=503, detail="FTC Events API is not configured. Set FTC_API_USERNAME and FTC_API_TOKEN on the server.")
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), auth=(username, token)) as client:
-            response = await client.get(f"{FIRST_API}/{path.lstrip('/')}", params=params)
+            query = {k: v for k, v in (params or {}).items() if v is not None}
+            response = await client.get(f"{FIRST_API}/{path.lstrip('/')}", params=query)
         if response.status_code == 401:
             raise HTTPException(status_code=502, detail="FTC API rejected the configured credentials.")
         if response.status_code == 404:
@@ -157,7 +191,7 @@ async def sdk_inventory() -> dict[str, Any]:
         "thirdParty": [
             {
                 "name": "FIRST FTC Events API",
-                "purpose": "Official event, team, and match results when credentials are configured.",
+                "purpose": "Official events, teams, schedule, match results, score details, rankings, alliances, awards, advancement and leagues when credentials are configured.",
                 "data": "Public tournament metadata. No scout notes leave this computer unless you export them.",
                 "url": "https://ftc-events.firstinspires.org/services/API",
                 "required": False,
@@ -182,13 +216,23 @@ async def sdk_inventory() -> dict[str, Any]:
     }
 
 
+@app.get("/api/ftc/season")
+async def season_summary(season: str = Query(FIRST_SEASON)) -> Any:
+    return await first_get(season_value(season))
+
+
 @app.get("/api/ftc/events")
-async def events(season: str = Query("2027")) -> Any:
-    return await first_get(f"{season_value(season)}/events")
+async def events(
+    season: str = Query(FIRST_SEASON),
+    event_code: str | None = Query(None),
+    team_number: int | None = Query(None),
+) -> Any:
+    params = {"eventCode": event_value(event_code) if event_code else None, "teamNumber": team_value(team_number)}
+    return await first_get(f"{season_value(season)}/events", params)
 
 
 @app.get("/api/ftc/teams")
-async def teams(season: str = Query("2027"), event_code: str = Query(..., min_length=3, max_length=20)) -> Any:
+async def teams(season: str = Query(FIRST_SEASON), event_code: str = Query(..., min_length=3, max_length=20)) -> Any:
     season = season_value(season)
     code = event_value(event_code)
     result = await first_get(f"{season}/teams", {"eventCode": code, "page": 1})
@@ -204,13 +248,149 @@ async def teams(season: str = Query("2027"), event_code: str = Query(..., min_le
     return result
 
 
+@app.get("/api/ftc/team")
+async def team_info(season: str = Query(FIRST_SEASON), team_number: int = Query(...)) -> Any:
+    return await first_get(f"{season_value(season)}/teams", {"teamNumber": team_value(team_number)})
+
+
 @app.get("/api/ftc/matches")
 async def matches(
-    season: str = Query("2027"),
+    season: str = Query(FIRST_SEASON),
     event_code: str = Query(..., min_length=3, max_length=20),
-    tournament_level: str = Query("qual", pattern="^(qual|playoff)$"),
+    tournament_level: str = Query("qual", pattern=LEVEL_PATTERN),
+    team_number: int | None = Query(None),
+    match_number: int | None = Query(None, ge=1),
 ) -> Any:
-    return await first_get(f"{season_value(season)}/matches/{event_value(event_code)}", {"tournamentLevel": tournament_level})
+    params = {"tournamentLevel": tournament_level, "teamNumber": team_value(team_number), "matchNumber": match_number}
+    return await first_get(f"{season_value(season)}/matches/{event_value(event_code)}", params)
+
+
+@app.get("/api/ftc/scores")
+async def scores(
+    season: str = Query(FIRST_SEASON),
+    event_code: str = Query(..., min_length=3, max_length=20),
+    tournament_level: str = Query("qual", pattern=LEVEL_PATTERN),
+    team_number: int | None = Query(None),
+    match_number: int | None = Query(None, ge=1),
+) -> Any:
+    """Per-alliance score breakdown. For BioBuzz (season 2026) this includes Hive tips, flowers and park."""
+    params = {"teamNumber": team_value(team_number), "matchNumber": match_number}
+    return await first_get(f"{season_value(season)}/scores/{event_value(event_code)}/{tournament_level}", params)
+
+
+@app.get("/api/ftc/schedule")
+async def schedule(
+    season: str = Query(FIRST_SEASON),
+    event_code: str = Query(..., min_length=3, max_length=20),
+    tournament_level: str = Query("qual", pattern=LEVEL_PATTERN),
+    team_number: int | None = Query(None),
+) -> Any:
+    params = {"tournamentLevel": tournament_level, "teamNumber": team_value(team_number)}
+    return await first_get(f"{season_value(season)}/schedule/{event_value(event_code)}", params)
+
+
+@app.get("/api/ftc/schedule/hybrid")
+async def schedule_hybrid(
+    season: str = Query(FIRST_SEASON),
+    event_code: str = Query(..., min_length=3, max_length=20),
+    tournament_level: str = Query("qual", pattern=LEVEL_PATTERN),
+) -> Any:
+    """Schedule merged with results: upcoming matches plus scores for the ones already played."""
+    return await first_get(f"{season_value(season)}/schedule/{event_value(event_code)}/{tournament_level}/hybrid")
+
+
+@app.get("/api/ftc/rankings")
+async def rankings(
+    season: str = Query(FIRST_SEASON),
+    event_code: str = Query(..., min_length=3, max_length=20),
+    team_number: int | None = Query(None),
+    top: int | None = Query(None, ge=1, le=200),
+) -> Any:
+    params = {"teamNumber": team_value(team_number), "top": top}
+    return await first_get(f"{season_value(season)}/rankings/{event_value(event_code)}", params)
+
+
+@app.get("/api/ftc/alliances")
+async def alliances(season: str = Query(FIRST_SEASON), event_code: str = Query(..., min_length=3, max_length=20)) -> Any:
+    return await first_get(f"{season_value(season)}/alliances/{event_value(event_code)}")
+
+
+@app.get("/api/ftc/alliances/selection")
+async def alliance_selection(season: str = Query(FIRST_SEASON), event_code: str = Query(..., min_length=3, max_length=20)) -> Any:
+    """Pick-by-pick order of the alliance selection, including declines."""
+    return await first_get(f"{season_value(season)}/alliances/{event_value(event_code)}/selection")
+
+
+@app.get("/api/ftc/awards")
+async def awards(
+    season: str = Query(FIRST_SEASON),
+    event_code: str | None = Query(None),
+    team_number: int | None = Query(None),
+) -> Any:
+    season = season_value(season)
+    if event_code and team_number:
+        return await first_get(f"{season}/awards/{event_value(event_code)}/{team_value(team_number)}")
+    if event_code:
+        return await first_get(f"{season}/awards/{event_value(event_code)}")
+    if team_number:
+        return await first_get(f"{season}/awards/{team_value(team_number)}")
+    raise HTTPException(status_code=422, detail="Pass event_code, team_number, or both.")
+
+
+@app.get("/api/ftc/awards/list")
+async def award_list(season: str = Query(FIRST_SEASON)) -> Any:
+    return await first_get(f"{season_value(season)}/awards/list")
+
+
+@app.get("/api/ftc/advancement")
+async def advancement(
+    season: str = Query(FIRST_SEASON),
+    event_code: str | None = Query(None),
+    exclude_skipped: bool | None = Query(None),
+) -> Any:
+    """Event advancement list, or regional championship advancement when no event code is given."""
+    season = season_value(season)
+    if not event_code:
+        return await first_get(f"{season}/advancement")
+    return await first_get(f"{season}/advancement/{event_value(event_code)}", {"excludeSkipped": exclude_skipped})
+
+
+@app.get("/api/ftc/advancement/points")
+async def advancement_points(season: str = Query(FIRST_SEASON), event_code: str = Query(..., min_length=3, max_length=20)) -> Any:
+    return await first_get(f"{season_value(season)}/advancement/{event_value(event_code)}/points")
+
+
+@app.get("/api/ftc/advancement/source")
+async def advancement_source(
+    season: str = Query(FIRST_SEASON),
+    event_code: str = Query(..., min_length=3, max_length=20),
+    include_declines: bool | None = Query(None),
+) -> Any:
+    params = {"includeDeclines": include_declines}
+    return await first_get(f"{season_value(season)}/advancement/{event_value(event_code)}/source", params)
+
+
+@app.get("/api/ftc/leagues")
+async def leagues(
+    season: str = Query(FIRST_SEASON),
+    region_code: str | None = Query(None),
+    league_code: str | None = Query(None),
+) -> Any:
+    params = {
+        "regionCode": region_value(region_code) if region_code else None,
+        "leagueCode": region_value(league_code) if league_code else None,
+    }
+    return await first_get(f"{season_value(season)}/leagues", params)
+
+
+@app.get("/api/ftc/leagues/members")
+async def league_members(season: str = Query(FIRST_SEASON), region_code: str = Query(...), league_code: str = Query(...)) -> Any:
+    return await first_get(f"{season_value(season)}/leagues/members/{region_value(region_code)}/{region_value(league_code)}")
+
+
+@app.get("/api/ftc/leagues/rankings")
+async def league_rankings(season: str = Query(FIRST_SEASON), region_code: str = Query(...), league_code: str = Query(...)) -> Any:
+    return await first_get(f"{season_value(season)}/leagues/rankings/{region_value(region_code)}/{region_value(league_code)}")
 
 
 @app.get("/api/toa/event/{event_key}/matches")
@@ -284,18 +464,20 @@ async def ftcscout_team(number: int) -> Any:
 
 
 @app.get("/api/ftcscout/events")
-async def ftcscout_events(season: int = Query(2027)) -> Any:
+async def ftcscout_events(season: int = Query(int(FIRST_SEASON))) -> Any:
     """Fetch events for a season from FTCScout."""
     events = await get_events(season)
     return {"events": events, "season": season, "count": len(events)}
 
 
 @app.get("/api/ftcscout/rankings")
-async def ftcscout_rankings(season: int = Query(2027), skip: int = Query(0), take: int = Query(100)) -> Any:
+async def ftcscout_rankings(season: int = Query(int(FIRST_SEASON)), skip: int = Query(0), take: int = Query(100)) -> Any:
     """Fetch TEP rankings from FTCScout."""
     records = await get_tep_records(season, skip, take)
     return {"rankings": records, "season": season, "count": len(records)}
 
 
 if STATIC_DIR.exists():
+    # The production build uses the GitHub Pages base path /VITE/, so serve it there as well as at the root.
+    app.mount("/VITE", StaticFiles(directory=STATIC_DIR, html=True), name="web-pages")
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="web")

@@ -12,6 +12,54 @@ async function apiJson(url) {
   return data;
 }
 
+const sideTeams = (teams = [], side) =>
+  teams
+    .filter((x) => String(x.station || "").startsWith(side))
+    .map((x) => x.teamNumber)
+    .join(" · ");
+
+// Official FIRST Events API views: endpoint plus a flattening of the response into table rows.
+const OFFICIAL_VIEWS = {
+  rankings: {
+    label: "Рейтинг",
+    url: (q) => `/api/ftc/rankings?${q}`,
+    head: ["#", "Команда", "W-L-T", "Ср. квал", "Матчи"],
+    rows: (d) =>
+      (d.rankings || []).map((r) => [
+        r.rank,
+        `${r.teamNumber} ${r.teamName || ""}`,
+        `${r.wins ?? 0}-${r.losses ?? 0}-${r.ties ?? 0}`,
+        r.qualAverage ?? "—",
+        r.matchesPlayed ?? "—",
+      ]),
+  },
+  schedule: {
+    label: "Расписание и счёт",
+    url: (q, level) => `/api/ftc/schedule/hybrid?${q}&tournament_level=${level}`,
+    head: ["Матч", "Время", "Красные", "Синие", "Счёт"],
+    rows: (d) =>
+      (d.schedule || []).map((m) => [
+        m.description || m.matchNumber,
+        m.startTime ? new Date(m.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
+        sideTeams(m.teams, "Red"),
+        sideTeams(m.teams, "Blue"),
+        m.scoreRedFinal != null ? `${m.scoreRedFinal} : ${m.scoreBlueFinal}` : "—",
+      ]),
+  },
+  alliances: {
+    label: "Альянсы",
+    url: (q) => `/api/ftc/alliances?${q}`,
+    head: ["#", "Капитан", "Пик 1", "Пик 2", "Запасной"],
+    rows: (d) => (d.alliances || []).map((a) => [a.number, a.captain ?? "—", a.round1 ?? "—", a.round2 ?? "—", a.backup ?? "—"]),
+  },
+  awards: {
+    label: "Награды",
+    url: (q) => `/api/ftc/awards?${q}`,
+    head: ["Награда", "Место", "Команда", "Человек"],
+    rows: (d) => (d.awards || []).map((a) => [a.name, a.series ?? "—", a.teamNumber ?? "—", a.person || "—"]),
+  },
+};
+
 function exportRow(db, r) {
   const t = db.teams.find((x) => x.id === r.teamId) || {};
   return {
@@ -44,11 +92,30 @@ function exportRow(db, r) {
 }
 
 export default function Data({ db, setDb, toast }) {
-  const [season, setSeason] = useState((db.meta.season || "2026-2027").replace(/\D/g, "").slice(-4) || "2027");
+  // FIRST and FTCScout number seasons by the starting year: BIOBUZZ 2026-2027 is "2026".
+  const [season, setSeason] = useState(String(db.meta.season || "").match(/\d{4}/)?.[0] || "2026");
   const [code, setCode] = useState(db.meta.demo ? "" : db.meta.eventCode || "");
   const [toaKey, setToaKey] = useState("");
   const [events, setEvents] = useState([]);
   const [out, setOut] = useState("");
+  const [official, setOfficial] = useState(null);
+  const [officialLevel, setOfficialLevel] = useState("qual");
+
+  async function loadOfficial(kind) {
+    if (!code.trim()) {
+      toast("Введите код ивента.", true);
+      return;
+    }
+    const q = `season=${encodeURIComponent(season)}&event_code=${encodeURIComponent(code.trim())}`;
+    try {
+      const data = await apiJson(OFFICIAL_VIEWS[kind].url(q, officialLevel));
+      const rows = OFFICIAL_VIEWS[kind].rows(data);
+      setOfficial({ kind, rows });
+      if (!rows.length) toast("FIRST вернул пустой список: данных по ивенту ещё нет.");
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
   const [consent, setConsent] = useState(false);
 
   function exportCsv(records) {
@@ -104,7 +171,7 @@ export default function Data({ db, setDb, toast }) {
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Импорт и экспорт</h1>
+      <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">Импорт и экспорт</h1>
       <p className="mt-1 mb-6 text-sm text-zinc-500">FIRST Events API и TOA работают через локальный прокси. Ключи не вводятся в браузер (кроме кода ивента).</p>
       <DemoBanner demo={db.meta.demo} />
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -118,7 +185,7 @@ export default function Data({ db, setDb, toast }) {
             <Button variant="secondary" onClick={() => exportCsv([])}>
               Пустой шаблон
             </Button>
-            <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-800 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400">
+            <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-800 px-3 py-2 text-xs font-semibold">
               Импорт CSV
               <input
                 type="file"
@@ -145,7 +212,7 @@ export default function Data({ db, setDb, toast }) {
             <Button variant="secondary" onClick={() => download("vite-biobuzz-backup.json", JSON.stringify(db, null, 2), "application/json")}>
               Скачать JSON
             </Button>
-            <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-800 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400">
+            <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-800 px-3 py-2 text-xs font-semibold">
               Восстановить
               <input
                 type="file"
@@ -243,7 +310,7 @@ export default function Data({ db, setDb, toast }) {
                       }
                     });
                     next.meta.eventCode = code.toUpperCase();
-                    next.meta.season = `${Number(season) - 1}-${season}`;
+                    next.meta.season = `${season}-${Number(season) + 1}`;
                     if (!next.draft?.captain && next.teams[0]) next.draft = { ...(next.draft || {}), captain: next.teams[0].id, picked: [], removed: [] };
                     setDb(next);
                   }
@@ -255,6 +322,22 @@ export default function Data({ db, setDb, toast }) {
             >
               Загрузить команды и матчи
             </Button>
+          </div>
+          <div className="mt-4 border-t border-zinc-800 pt-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-zinc-400">Официальные данные ивента</span>
+              <select className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" value={officialLevel} onChange={(e) => setOfficialLevel(e.target.value)} aria-label="Стадия турнира">
+                <option value="qual">Квалификация</option>
+                <option value="playoff">Плей-офф</option>
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(OFFICIAL_VIEWS).map(([kind, v]) => (
+                <Button key={kind} variant="secondary" className="px-3 py-2 text-xs" onClick={() => loadOfficial(kind)}>
+                  {v.label}
+                </Button>
+              ))}
+            </div>
           </div>
           {events.length ? (
             <select
@@ -313,20 +396,20 @@ export default function Data({ db, setDb, toast }) {
               variant="secondary"
               onClick={async () => {
                 try {
-                  const data = await apiJson("/api/ftcscout/events?season=2027");
-                  setOut(`Ивентов в сезоне 2027: ${data.count}.`);
+                  const data = await apiJson("/api/ftcscout/events?season=" + encodeURIComponent(season));
+                  setOut(`Ивентов в сезоне ${season}: ${data.count}.`);
                 } catch (e) {
                   toast(e.message, true);
                 }
               }}
             >
-              Ивенты 2027
+              Ивенты сезона
             </Button>
             <Button
               variant="secondary"
               onClick={async () => {
                 try {
-                  const data = await apiJson("/api/ftcscout/rankings?season=2027&take=50");
+                  const data = await apiJson(`/api/ftcscout/rankings?season=${encodeURIComponent(season)}&take=50`);
                   setOut(`Рейтинг TEP: ${data.count} команд в топ-50.`);
                 } catch (e) {
                   toast(e.message, true);
@@ -338,9 +421,47 @@ export default function Data({ db, setDb, toast }) {
           </div>
         </Panel>
       </div>
-      {out ? <p className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-600 shadow-sm">{out}</p> : null}
+      {out ? <p className="mt-4 rounded-xl border border-zinc-700 bg-zinc-900 p-3 font-mono text-sm text-zinc-200">{out}</p> : null}
+      {official ? (
+        <Panel className="mt-4">
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h2 className="font-display text-base font-bold text-zinc-50">
+              {OFFICIAL_VIEWS[official.kind].label} · <span className="font-mono text-honey-400">{code.toUpperCase()}</span>
+            </h2>
+            <span className="text-xs text-zinc-500">FIRST Events API · сезон {season}</span>
+          </div>
+          {official.rows.length ? (
+            <div className="-mx-1 max-h-[480px] overflow-auto">
+              <table className="w-full min-w-[480px] text-left text-sm">
+                <thead className="sticky top-0 bg-zinc-900 text-xs text-zinc-500">
+                  <tr>
+                    {OFFICIAL_VIEWS[official.kind].head.map((h) => (
+                      <th key={h} className="border-b border-zinc-800 py-2 pr-4 font-medium">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {official.rows.map((row, i) => (
+                    <tr key={i} className="border-b border-zinc-800/60 last:border-0">
+                      {row.map((cell, j) => (
+                        <td key={j} className={`py-2 pr-4 ${j === 0 ? "font-mono text-zinc-400" : "text-zinc-200"}`}>
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">Данных пока нет: FIRST публикует их по ходу ивента.</p>
+          )}
+        </Panel>
+      ) : null}
       <Panel className="mt-4">
-        <h2 className="text-sm font-semibold text-zinc-900">Настройки турнира</h2>
+        <h2 className="text-sm font-semibold text-zinc-50">Настройки турнира</h2>
         <form
           className="mt-3 grid gap-3 sm:grid-cols-3"
           onSubmit={(e) => {
@@ -361,7 +482,7 @@ export default function Data({ db, setDb, toast }) {
             <input className={inputClass()} name="season" defaultValue={db.meta.season} />
           </Field>
           <label className="sm:col-span-3 flex gap-2 text-sm cursor-pointer">
-            <input type="checkbox" className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            <input type="checkbox" className="accent-honey-400" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
             Сохраняю только данные турнира, без персональных сведений учеников.
           </label>
           <Button type="submit">Сохранить</Button>
