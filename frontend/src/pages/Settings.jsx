@@ -1,11 +1,24 @@
 import { Button, Field, inputClass, Panel } from "../components/ui";
 import { wipeAll } from "../lib/store";
 
-export default function Settings({ prefs, setPrefs, toast, setDb }) {
+export default function Settings({ prefs, setPrefs, toast, setDb, lang = "ru" }) {
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Настройки и данные</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-white">Настройки и данные</h1>
       <p className="mt-1 mb-6 text-sm text-zinc-500">Возраст, хранение, право быть забытым. Никаких тёмных паттернов: отказ и удаление не спрятаны.</p>
+
+      {/* Language Switch */}
+      <Panel className="mb-4 space-y-3">
+        <h2 className="text-sm font-semibold text-zinc-100">Язык / Language</h2>
+        <div className="flex gap-2">
+          <Button variant={prefs.lang === "ru" ? "primary" : "secondary"} onClick={() => setPrefs({ ...prefs, lang: "ru" })}>
+            🇷🇺 Русский
+          </Button>
+          <Button variant={prefs.lang === "en" ? "primary" : "secondary"} onClick={() => setPrefs({ ...prefs, lang: "en" })}>
+            🇬🇧 English
+          </Button>
+        </div>
+      </Panel>
       <Panel className="space-y-3">
         <h2 className="text-sm font-semibold">Возраст участника</h2>
         <p className="text-sm text-zinc-400">FTC — молодёжная программа. Локальный профиль не требует email. Подтвердите возраст или согласие наставника.</p>
@@ -57,7 +70,7 @@ export default function Settings({ prefs, setPrefs, toast, setDb }) {
             if (!confirm("Полностью удалить профиль и скаутские данные с этого устройства?")) return;
             wipeAll();
             setDb({ version: 2, meta: { demo: false, eventName: "", eventCode: "", season: "2026-2027", updatedAt: new Date().toISOString() }, teams: [], records: [], draft: { captain: "", picked: [], removed: [] } });
-            setPrefs({ cookie: { decided: true, storage: false, shownAt: new Date().toISOString() }, age: { confirmed: false, over13: false, guardian: false }, displayName: "" });
+            setPrefs({ cookie: { decided: true, storage: false, shownAt: new Date().toISOString() }, age: { confirmed: false, over13: false, guardian: false }, displayName: "", lang: null });
             toast("Данные удалены.");
           }}
         >

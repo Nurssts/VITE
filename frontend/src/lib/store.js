@@ -31,6 +31,7 @@ export function defaultPrefs() {
     cookie: { decided: false, storage: false, shownAt: null },
     age: { confirmed: false, over13: false, guardian: false },
     displayName: "",
+    lang: null, // null = not chosen yet (shows language picker)
   };
 }
 

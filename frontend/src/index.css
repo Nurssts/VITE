@@ -10,7 +10,26 @@ html,
 body,
 #root {
   min-height: 100%;
-  background: #000;
+  background: #09090b; /* zinc-950 */
+  color: #fafafa;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar – dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
 }
 
 *:focus-visible {
@@ -28,13 +47,23 @@ body,
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 700;
+  border-radius: 8px;
 }
 .skip-link:focus {
   top: 12px;
 }
 
 .chart-note {
-  @apply mt-2 text-[11px] leading-relaxed text-zinc-500;
+  @apply mt-2 text-[11px] leading-relaxed text-zinc-600;
+}
+
+/* Recharts dark tweaks */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #27272a;
+}
+.recharts-text {
+  fill: #71717a;
 }
 
 .print-root {
