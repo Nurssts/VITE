@@ -20,7 +20,7 @@ export default function Notebook({ db }) {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Engineering Notebook</h1>
+          <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">Engineering Notebook</h1>
           <p className="mt-1 text-sm text-zinc-500">Одностраничный отчёт для Innovate / Inspire. Печать в системный PDF. Только ваши данные, без выдуманных метрик.</p>
         </div>
         <Button onClick={printPdf}>Печать / сохранить PDF</Button>
@@ -40,10 +40,10 @@ export default function Notebook({ db }) {
         <div className="mt-4 h-48" role="img" aria-label="График синергии вклада команд для судейского PDF">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chart}>
-              <CartesianGrid stroke="#27272a" vertical={false} />
-              <XAxis dataKey="name" stroke="#a1a1aa" fontSize={11} />
-              <YAxis stroke="#a1a1aa" fontSize={11} />
-              <Bar dataKey="mean" fill="#ffffff" name="Модельный вклад" />
+              <CartesianGrid stroke="#25221b" vertical={false} />
+              <XAxis dataKey="name" stroke="#857e6d" fontSize={11} />
+              <YAxis stroke="#857e6d" fontSize={11} />
+              <Bar dataKey="mean" fill="#f7bf3c" radius={[3, 3, 0, 0]} name="Модельный вклад" />
             </BarChart>
           </ResponsiveContainer>
         </div>

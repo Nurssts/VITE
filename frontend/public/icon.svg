@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
   <title id="title">VITE</title>
-  <desc id="desc">>=>E@><=K9 7=0: ?;0BD>@<K VITE BioBuzz Alliance Matrix</desc>
-  <rect width="64" height="64" rx="16" fill="#000"/>
-  <path d="M18 18h8l6 16 6-16h8L36 46h-8z" fill="#fff"/>
+  <rect width="64" height="64" rx="14" fill="#0d0c0a"/>
+  <path d="M32 7 53.6 19.5v25L32 57 10.4 44.5v-25z" fill="#f7bf3c"/>
+  <path d="M22 21h6.5L32 33.5 35.5 21H42l-7 22h-6z" fill="#0d0c0a"/>
 </svg>

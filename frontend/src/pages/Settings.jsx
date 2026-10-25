@@ -4,7 +4,7 @@ import { wipeAll } from "../lib/store";
 export default function Settings({ prefs, setPrefs, toast, setDb, lang = "ru" }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-white">Настройки и данные</h1>
+      <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">Настройки и данные</h1>
       <p className="mt-1 mb-6 text-sm text-zinc-500">Возраст, хранение, право быть забытым. Никаких тёмных паттернов: отказ и удаление не спрятаны.</p>
 
       {/* Language Switch */}
@@ -26,13 +26,13 @@ export default function Settings({ prefs, setPrefs, toast, setDb, lang = "ru" })
           <input className={inputClass()} value={prefs.displayName} onChange={(e) => setPrefs({ ...prefs, displayName: e.target.value })} />
         </Field>
         <label className="flex gap-2 text-sm cursor-pointer">
-          <input type="checkbox" className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" checked={prefs.age.over13} onChange={(e) => setPrefs({ ...prefs, age: { ...prefs.age, over13: e.target.checked } })} />
+          <input type="checkbox" className="accent-honey-400" checked={prefs.age.over13} onChange={(e) => setPrefs({ ...prefs, age: { ...prefs.age, over13: e.target.checked } })} />
           Мне есть 13 лет.
         </label>
         <label className="flex gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
-            className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+            className="accent-honey-400"
             checked={prefs.age.guardian}
             onChange={(e) => setPrefs({ ...prefs, age: { ...prefs.age, guardian: e.target.checked } })}
           />

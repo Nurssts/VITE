@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "./components/Layout";
-import { Button } from "./components/ui";
+import { BrandMark, Button } from "./components/ui";
 import Analysis from "./pages/Analysis";
 import Data from "./pages/Data";
 import Draft from "./pages/Draft";
@@ -17,60 +17,39 @@ const PAGES = ["overview", "scouting", "teams", "analysis", "draft", "notebook",
 
 /* ─── Language Selection Screen ─── */
 function LangSelect({ onSelect }) {
-  const [hovered, setHovered] = useState(null);
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black px-6">
-      {/* Background pattern */}
-      <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{
-        backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
-        backgroundSize: "32px 32px"
-      }} />
-
-      <div className="relative flex flex-col items-center gap-8 w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white shadow-[0_0_40px_rgba(255,255,255,0.15)]">
-            <span className="text-2xl font-black text-black leading-none">V</span>
-          </div>
+    <div className="comb-bg fixed inset-0 z-[100] flex flex-col items-center justify-center bg-ink px-6">
+      <div className="relative flex w-full max-w-sm flex-col items-center gap-10">
+        <div className="flex flex-col items-center gap-4">
+          <BrandMark size={64} />
           <div className="text-center">
-            <div className="text-2xl font-bold tracking-widest text-white">VITE</div>
-            <div className="text-sm text-zinc-500 mt-0.5">BioBuzz Alliance Matrix</div>
+            <div className="font-display text-3xl font-extrabold tracking-[0.2em] text-zinc-50">VITE</div>
+            <div className="mt-1 text-sm text-zinc-400">BioBuzz Alliance Matrix</div>
           </div>
         </div>
 
-        {/* Language selector cards */}
         <div className="w-full">
-          <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.15em] text-zinc-600">
-            Select Language / Выберите язык
-          </p>
+          <p className="mb-4 text-center text-sm text-zinc-400">Выберите язык · Select language</p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { code: "ru", label: "Русский", sub: "Russian" },
-              { code: "en", label: "English", sub: "Английский" },
-            ].map(({ code, label, sub }) => (
+              { code: "ru", label: "Русский" },
+              { code: "en", label: "English" },
+            ].map(({ code, label }) => (
               <button
                 key={code}
                 type="button"
                 onClick={() => onSelect(code)}
-                onMouseEnter={() => setHovered(code)}
-                onMouseLeave={() => setHovered(null)}
-                className={`flex flex-col items-center gap-2 rounded-2xl border p-6 transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 ${
-                  hovered === code
-                    ? "border-white bg-white text-black shadow-[0_0_30px_rgba(255,255,255,0.15)]"
-                    : "border-zinc-800 bg-zinc-950 text-white hover:border-zinc-600"
-                }`}
-                aria-label={`Select ${label}`}
+                className="group flex flex-col items-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900/80 p-6 text-zinc-50 transition-colors hover:border-honey-400 hover:bg-honey-900/40"
               >
-                <span className="text-2xl">{code === "ru" ? "🇷🇺" : "🇬🇧"}</span>
+                <span className="font-mono text-2xl font-bold text-zinc-400 transition-colors group-hover:text-honey-400">{code.toUpperCase()}</span>
                 <span className="text-base font-semibold">{label}</span>
-                <span className={`text-xs ${hovered === code ? "text-zinc-500" : "text-zinc-600"}`}>{sub}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-zinc-700">
-          FTC BioBuzz · Offline-first · No data collection
+        <p className="text-center font-mono text-[11px] text-zinc-500">
+          FTC BioBuzz · offline-first · no tracking
         </p>
       </div>
     </div>
@@ -192,7 +171,7 @@ export default function App() {
       {/* Cookie banner */}
       {!prefs.cookie.decided ? (
         <section
-          className="fixed inset-x-3 bottom-20 z-40 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 shadow-2xl lg:bottom-6 lg:left-auto lg:right-6 lg:max-w-lg"
+          className="fixed inset-x-3 bottom-20 z-40 rounded-2xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl lg:bottom-6 lg:left-auto lg:right-6 lg:max-w-lg"
           aria-label={t(lang, "cookie_title")}
         >
           <h2 className="text-sm font-semibold text-white">{t(lang, "cookie_title")}</h2>
@@ -211,7 +190,7 @@ export default function App() {
 
       {/* Age gate */}
       {!prefs.age.confirmed ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/90 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="age-title">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/90 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="age-title">
           <form
             className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
             onSubmit={(e) => {
@@ -226,20 +205,20 @@ export default function App() {
               setPrefs({ ...prefs, age: { confirmed: true, over13, guardian } });
             }}
           >
-            <div className="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-white">
-              <span className="text-base font-black text-black">V</span>
+            <div className="mb-4">
+              <BrandMark size={40} />
             </div>
-            <h2 id="age-title" className="text-lg font-semibold text-white">
+            <h2 id="age-title" className="font-display text-lg font-bold text-zinc-50">
               {t(lang, "age_title")}
             </h2>
             <p className="mt-2 text-sm text-zinc-400">{t(lang, "age_body")}</p>
             <div className="mt-4 flex flex-col gap-3">
               <label className="flex items-start gap-3 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-300 cursor-pointer hover:border-zinc-600 transition-colors">
-                <input type="checkbox" name="over13" className="mt-0.5 h-4 w-4 accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" />
+                <input type="checkbox" name="over13" className="mt-0.5 h-4 w-4 accent-honey-400" />
                 {t(lang, "age_over13")}
               </label>
               <label className="flex items-start gap-3 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-300 cursor-pointer hover:border-zinc-600 transition-colors">
-                <input type="checkbox" name="guardian" className="mt-0.5 h-4 w-4 accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" />
+                <input type="checkbox" name="guardian" className="mt-0.5 h-4 w-4 accent-honey-400" />
                 {t(lang, "age_guardian")}
               </label>
             </div>
@@ -254,7 +233,7 @@ export default function App() {
       {toast ? (
         <div
           className={`fixed right-4 top-20 z-50 rounded-xl px-4 py-3 text-sm shadow-lg transition-all ${
-            toast.error ? "bg-white text-black" : "border border-zinc-800 bg-zinc-950 text-white"
+            toast.error ? "border border-sting/60 bg-zinc-900 text-sting" : "border border-zinc-700 bg-zinc-900 text-zinc-50"
           }`}
           role="status"
         >

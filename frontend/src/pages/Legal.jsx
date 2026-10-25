@@ -13,11 +13,11 @@ export default function Legal() {
   const [tab, setTab] = useState("privacy");
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Правовая информация</h1>
+      <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">Правовая информация</h1>
       <p className="mt-1 mb-6 text-sm text-zinc-500">Короткие, проверяемые формулировки. Нет скрытых согласий и заранее отмеченных галочек.</p>
       <div className="mb-4 flex flex-wrap gap-2">
         {SECTIONS.map((s) => (
-          <button key={s.id} type="button" onClick={() => setTab(s.id)} className={`rounded-full border px-3 py-1 text-xs ${tab === s.id ? "border-white bg-white text-black" : "border-zinc-800 text-zinc-400"} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400`} aria-label={`Показать ${s.title}`}>
+          <button key={s.id} type="button" onClick={() => setTab(s.id)} className={`rounded-full border px-3 py-1 text-xs ${tab === s.id ? "border-honey-400 bg-honey-400 font-semibold text-ink" : "border-zinc-700 text-zinc-300 hover:border-zinc-500"}`} aria-label={`Показать ${s.title}`}>
             {s.title}
           </button>
         ))}

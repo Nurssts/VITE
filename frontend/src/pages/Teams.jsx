@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
+import { Button, DemoBanner, Field, inputClass, Panel, ROLE_COLORS } from "../components/ui";
 import { allStats, fmt, initials, priority, roleLabel, stats } from "../lib/model";
 
 export default function Teams({ db, setPage, onAddTeam }) {
@@ -25,11 +25,11 @@ export default function Teams({ db, setPage, onAddTeam }) {
           ← Все команды
         </Button>
         <div className="mt-4 flex items-center gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-xl bg-white text-sm font-bold text-black" aria-hidden="true">
+          <span className="hex grid h-14 w-12 place-items-center bg-honey-400 font-mono text-sm font-bold text-ink" aria-hidden="true">
             {initials(t)}
           </span>
           <div>
-            <h1 className="text-2xl font-semibold">{t.name}</h1>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-50">{t.name}</h1>
             <p className="text-sm text-zinc-500">
               {t.number} · {t.region || "регион не указан"} · {roleLabel(s)}
             </p>
@@ -54,9 +54,9 @@ export default function Teams({ db, setPage, onAddTeam }) {
             <div key={k} className="mb-3 grid grid-cols-[100px_1fr_36px] items-center gap-2 text-xs">
               <span className="uppercase text-zinc-500">{k}</span>
               <div className="h-1.5 overflow-hidden rounded bg-zinc-800">
-                <div className="h-full bg-white" style={{ width: `${Math.round(s.profile[k])}%` }} />
+                <div className="h-full rounded" style={{ width: `${Math.round(s.profile[k])}%`, background: ROLE_COLORS[k] }} />
               </div>
-              <span className="text-right">{Math.round(s.profile[k])}</span>
+              <span className="text-right font-mono">{Math.round(s.profile[k])}</span>
             </div>
           ))}
           <p className="chart-note">Оценка вклада — сумма наблюдаемых действий, а не официальный счёт.</p>
@@ -69,7 +69,7 @@ export default function Teams({ db, setPage, onAddTeam }) {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Команды</h1>
+          <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">Команды</h1>
           <p className="mt-1 text-sm text-zinc-500">Профили, стабильность и объём скаутинга.</p>
         </div>
         <Button onClick={() => setOpen(true)}>+ Добавить команду</Button>
@@ -77,7 +77,7 @@ export default function Teams({ db, setPage, onAddTeam }) {
       <DemoBanner demo={db.meta.demo} />
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <input className={inputClass("sm:max-w-xs")} placeholder="Найти команду" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className={inputClass("sm:max-w-[180px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400")} value={filter} onChange={(e) => setFilter(e.target.value)}>
+        <select className={inputClass("sm:max-w-[180px]")} value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="all">Все приоритеты</option>
           <option value="A">A</option>
           <option value="Б">Б</option>
@@ -135,7 +135,7 @@ export default function Teams({ db, setPage, onAddTeam }) {
                 <input className={inputClass()} name="region" />
               </Field>
               <label className="flex gap-2 text-sm cursor-pointer">
-                <input type="checkbox" name="consent" required className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" />Я подтверждаю, что это публичные данные команды FTC, без персональных данных учеников.
+                <input type="checkbox" name="consent" required className="accent-honey-400" />Я подтверждаю, что это публичные данные команды FTC, без персональных данных учеников.
               </label>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={() => setOpen(false)}>

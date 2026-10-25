@@ -53,7 +53,7 @@ export default function Scouting({ db, onSave, onDelete, setPage }) {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Скаутинг матча</h1>
+          <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">Скаутинг матча</h1>
           <p className="mt-1 text-sm text-zinc-500">Одна запись — один робот. Не дублируйте очки альянса в обеих командах.</p>
         </div>
         <Button variant="secondary" onClick={() => setPage("data")}>
@@ -154,7 +154,7 @@ export default function Scouting({ db, onSave, onDelete, setPage }) {
             </p>
             <div className="sm:col-span-2">
               <label className="flex items-start gap-2 text-sm text-zinc-200 cursor-pointer">
-                <input type="checkbox" className="mt-1 accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
+                <input type="checkbox" className="mt-1 accent-honey-400" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
                 Подтверждаю, что это наблюдаемые факты, без персональных данных детей, и я согласен сохранить запись на этом устройстве.
               </label>
             </div>

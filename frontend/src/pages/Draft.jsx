@@ -1,4 +1,4 @@
-import { Button, DemoBanner, Panel } from "../components/ui";
+import { Button, DemoBanner, inputClass, Panel } from "../components/ui";
 import { denialPick, fmt, pairModel, roleLabel, stats, teamLabel } from "../lib/model";
 
 export default function Draft({ db, setDb }) {
@@ -21,7 +21,7 @@ export default function Draft({ db, setDb }) {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Live Draft Board</h1>
+          <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">Live Draft Board</h1>
           <p className="mt-1 text-sm text-zinc-500">Подсказки по синергии и denial pick. Решение принимает капитан.</p>
         </div>
         <Button variant="secondary" onClick={() => patch({ picked: [], removed: [] })}>
@@ -30,61 +30,74 @@ export default function Draft({ db, setDb }) {
       </div>
       <DemoBanner demo={db.meta.demo} />
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-sm">
-          <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Капитан</div>
-          <select className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" value={draft.captain} onChange={(e) => patch({ captain: e.target.value, picked: [] })}>
+        <aside className="h-fit rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-5 lg:sticky lg:top-20">
+          <div className="text-xs font-medium text-zinc-400">Капитан</div>
+          <select className={inputClass("mt-2")} value={draft.captain} onChange={(e) => patch({ captain: e.target.value, picked: [] })}>
             {db.teams.map((t) => (
               <option key={t.id} value={t.id}>
                 {teamLabel(t)}
               </option>
             ))}
           </select>
-          <div className="mt-4 rounded-lg border border-zinc-200 p-3 text-sm">
-            <div className="text-[11px] text-zinc-500">Партнёр</div>
-            <strong>{picked[0] ? teamLabel(db.teams.find((t) => t.id === picked[0])) : "не выбран"}</strong>
+          <div className={`mt-4 rounded-lg border p-3 text-sm ${picked[0] ? "border-honey-400/50 bg-honey-900/30" : "border-dashed border-zinc-700"}`}>
+            <div className="text-xs text-zinc-400">Партнёр</div>
+            <strong className={picked[0] ? "text-honey-300" : "font-medium text-zinc-500"}>{picked[0] ? teamLabel(db.teams.find((t) => t.id === picked[0])) : "не выбран"}</strong>
           </div>
           {best ? (
-            <p className="mt-4 text-xs leading-relaxed text-zinc-600">
+            <p className="mt-4 border-l-2 border-honey-400 pl-3 text-xs leading-relaxed text-zinc-300">
               Лучшая синергия в пуле: {teamLabel(best.team)} · индекс {Math.round(best.model?.score || 0)}. {best.model?.complementaryRoles ? "Комплиментарные роли Hive/Flower." : "Роли перекрываются — проверьте collision."}
             </p>
           ) : null}
           {denial ? (
-            <p className="mt-3 text-xs leading-relaxed text-zinc-600">
+            <p className="mt-3 border-l-2 border-sting pl-3 text-xs leading-relaxed text-zinc-300">
               Denial pick (перехват): {teamLabel(denial.team)} сильнее всего поднимает чужой альянс (угроза {Math.round(denial.threat)}). Берите, только если не нужен свой партнёр сильнее.
             </p>
           ) : null}
         </aside>
         <div>
-          <div className="mb-2 flex justify-between text-sm">
-            <strong>Доступные команды</strong>
-            <span className="text-zinc-500">{candidates.length} в пуле</span>
+          <div className="mb-3 flex items-baseline justify-between text-sm">
+            <h2 className="font-display text-base font-bold text-zinc-50">Доступные команды</h2>
+            <span className="font-mono text-xs text-zinc-500">{candidates.length} в пуле</span>
           </div>
           <div className="grid gap-2">
-            {candidates.map((x, i) => (
-              <article key={x.team.id} className="grid items-center gap-2 rounded-xl border border-zinc-800 p-3 sm:grid-cols-[32px_1fr_auto_auto]">
-                <span className="font-mono text-xs text-zinc-500">{String(i + 1).padStart(2, "0")}</span>
-                <div>
-                  <div className="text-sm font-medium">
-                    {x.team.number} · {x.team.name}
-                  </div>
-                  <div className="text-[11px] text-zinc-500">
-                    {x.st ? roleLabel(x.st) : ""} · синергия {x.model ? Math.round(x.model.score) : "—"} · вклад {x.model ? fmt(x.model.mean, 0) : "—"}
-                    {denial?.team.id === x.team.id ? " · DENIAL" : ""}
-                    {i === 0 ? " · BEST" : ""}
-                  </div>
-                </div>
-                <Button
-                  onClick={() => {
-                    patch({ picked: [x.team.id] });
-                  }}
+            {candidates.map((x, i) => {
+              const isBest = i === 0;
+              const isDenial = denial?.team.id === x.team.id;
+              return (
+                <article
+                  key={x.team.id}
+                  className={`grid grid-cols-[56px_1fr] items-center gap-x-4 gap-y-3 rounded-xl border p-3 sm:grid-cols-[56px_1fr_auto] ${
+                    isBest ? "border-honey-400/60 bg-honey-900/25" : "border-zinc-800 bg-zinc-900/40"
+                  }`}
                 >
-                  Выбрать
-                </Button>
-                <Button variant="secondary" onClick={() => patch({ removed: [...new Set([...removed, x.team.id])] })}>
-                  Взяли
-                </Button>
-              </article>
-            ))}
+                  <div className="text-center">
+                    <div className={`font-mono text-2xl font-medium leading-none ${isBest ? "text-honey-400" : "text-zinc-100"}`}>
+                      {x.model ? Math.round(x.model.score) : "—"}
+                    </div>
+                    <div className="mt-1 text-[10px] text-zinc-500">синергия</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-mono font-semibold text-zinc-50">{x.team.number}</span>
+                      <span className="truncate text-zinc-300">{x.team.name}</span>
+                      {isBest ? <span className="rounded bg-honey-400 px-1.5 py-0.5 text-[10px] font-bold text-ink">BEST</span> : null}
+                      {isDenial ? <span className="rounded border border-sting/60 px-1.5 py-0.5 text-[10px] font-bold text-sting">DENIAL</span> : null}
+                    </div>
+                    <div className="mt-0.5 text-xs text-zinc-500">
+                      {x.st ? roleLabel(x.st) : ""} · вклад <span className="font-mono text-zinc-300">{x.model ? fmt(x.model.mean, 0) : "—"}</span>
+                    </div>
+                  </div>
+                  <div className="col-span-2 flex gap-2 sm:col-span-1">
+                    <Button variant={isBest ? "primary" : "secondary"} className="flex-1 sm:flex-none" onClick={() => patch({ picked: [x.team.id] })}>
+                      Выбрать
+                    </Button>
+                    <Button variant="ghost" className="flex-1 sm:flex-none" onClick={() => patch({ removed: [...new Set([...removed, x.team.id])] })}>
+                      Взяли
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
           {removed.length ? (
             <Panel className="mt-4">
@@ -94,7 +107,7 @@ export default function Draft({ db, setDb }) {
                   const t = db.teams.find((x) => x.id === id);
                   if (!t) return null;
                   return (
-                    <button key={id} type="button" className="rounded-full border border-zinc-700 px-3 py-1 text-xs" onClick={() => patch({ removed: removed.filter((x) => x !== id) })}>
+                    <button key={id} type="button" className="rounded-full border border-zinc-700 px-3 py-1 font-mono text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-50" onClick={() => patch({ removed: removed.filter((x) => x !== id) })}>
                       {t.number} · вернуть
                     </button>
                   );

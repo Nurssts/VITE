@@ -4,37 +4,61 @@
 
 :root {
   color-scheme: dark;
+  --ink: #0d0c0a;
+  --wax: #25221b;
+  --honey: #f7bf3c;
 }
 
 html,
 body,
 #root {
   min-height: 100%;
-  background: #09090b; /* zinc-950 */
-  color: #fafafa;
+  background: var(--ink);
+  color: #f1ede4;
+  font-family: Onest, ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar – dark theme */
+/* Numbers line up in tables and KPIs */
+.tabular,
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--honey);
+  color: var(--ink);
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: var(--ink);
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--wax);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #38342a;
 }
 
 *:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--honey) !important;
   outline-offset: 3px;
+}
+
+select {
+  color-scheme: dark;
 }
 
 .skip-link {
@@ -42,8 +66,8 @@ body,
   left: 12px;
   top: -40px;
   z-index: 80;
-  background: #fff;
-  color: #000;
+  background: var(--honey);
+  color: var(--ink);
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 700;
@@ -54,16 +78,56 @@ body,
 }
 
 .chart-note {
-  @apply mt-2 text-[11px] leading-relaxed text-zinc-600;
+  @apply mt-3 text-[11px] leading-relaxed text-zinc-500;
 }
 
-/* Recharts dark tweaks */
+/* Hexagon clip for small badges (team avatars, brand mark) */
+.hex {
+  clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+}
+
+/* Faint honeycomb texture behind page heroes */
+.comb-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='48.5' viewBox='0 0 28 48.5'%3E%3Cpath d='M14 0l14 8.08v16.17L14 32.33 0 24.25V8.08zM14 32.33v16.17' fill='none' stroke='%23f7bf3c' stroke-opacity='.07' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+/* Honey fill rising in the hive map */
+.cell-fill {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: cell-rise 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes cell-rise {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.cell:hover .cell-edge,
+.cell:focus-visible .cell-edge {
+  stroke: var(--honey);
+}
+.cell:focus-visible {
+  outline: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Recharts */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: #27272a;
+  stroke: var(--wax);
 }
 .recharts-text {
-  fill: #71717a;
+  fill: #857e6d;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
 }
 
 .print-root {
