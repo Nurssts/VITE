@@ -1,0 +1,80 @@
+diff --git a/.env.example b/.env.example
+index a5ba9ee..eb6d01a 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,2 +1,8 @@
+-# Optional: Set this to Render backend URL when deploying frontend
++# Frontend (build time). Backend URL on Render; set as a GitHub Actions *variable* VITE_API_URL
+ # VITE_API_URL=https://vite-biobuzz-api.onrender.com
++
++# Backend (server environment ONLY; never commit real values)
++# FTC_API_USERNAME=
++# FTC_API_TOKEN=
++# TOA_API_KEY=
++# CORS_ORIGINS=https://nurssts.github.io
+diff --git a/.github/workflows/deploy.yml b/.github/workflows/deploy.yml
+index b6f78a8..8f80e3c 100644
+--- a/.github/workflows/deploy.yml
++++ b/.github/workflows/deploy.yml
+@@ -35,6 +35,8 @@ jobs:
+       - name: Build
+         working-directory: ./frontend
+         run: npm run build
++        env:
++          VITE_API_URL: ${{ vars.VITE_API_URL }}
+ 
+       - name: Setup Pages
+         uses: actions/configure-pages@v5
+diff --git a/frontend/src/pages/Data.jsx b/frontend/src/pages/Data.jsx
+index d27e5bf..053a505 100644
+--- a/frontend/src/pages/Data.jsx
++++ b/frontend/src/pages/Data.jsx
+@@ -3,8 +3,10 @@ import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
+ import { makeSeed } from "../lib/model";
+ import { bool, CSV_COLUMNS, csvEsc, download, parseCSV } from "../lib/store";
+ 
++const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
++
+ async function apiJson(url) {
+-  const response = await fetch(url, { headers: { Accept: "application/json" } });
++  const response = await fetch(API_BASE + url, { headers: { Accept: "application/json" } });
+   const data = await response.json().catch(() => ({}));
+   if (!response.ok) throw Error(data.detail || `Сервер вернул ${response.status}.`);
+   return data;
+diff --git a/render.yaml b/render.yaml
+index cf4dd26..94ba8ad 100644
+--- a/render.yaml
++++ b/render.yaml
+@@ -5,7 +5,13 @@ services:
+     plan: free
+     buildCommand: pip install -r requirements.txt
+     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+-    envVars:
+-      - key: PORT
+-        value: 8000
+     healthCheckPath: /api/health
++    envVars:
++      - key: FTC_API_USERNAME
++        sync: false
++      - key: FTC_API_TOKEN
++        sync: false
++      - key: TOA_API_KEY
++        sync: false
++      - key: CORS_ORIGINS
++        value: https://nurssts.github.io
+diff --git a/server.py b/server.py
+index 97aa0a5..f47b1c4 100644
+--- a/server.py
++++ b/server.py
+@@ -33,9 +33,10 @@ FIRST_API = "https://ftc-api.firstinspires.org/v2.0"
+ TOA_API = "https://theorangealliance.org/api"
+ 
+ app = FastAPI(title="VITE · BioBuzz Alliance Matrix", version="2.0.0")
++_extra_origins = [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+ app.add_middleware(
+     CORSMiddleware,
+-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8000", "http://localhost:8000"],
++    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8000", "http://localhost:8000", *_extra_origins],
+     allow_methods=["*"],
+     allow_headers=["*"],
+ )

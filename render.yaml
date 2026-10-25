@@ -5,7 +5,13 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: PORT
-        value: 8000
     healthCheckPath: /api/health
+    envVars:
+      - key: FTC_API_USERNAME
+        sync: false
+      - key: FTC_API_TOKEN
+        sync: false
+      - key: TOA_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://nurssts.github.io

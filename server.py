@@ -33,9 +33,10 @@ FIRST_API = "https://ftc-api.firstinspires.org/v2.0"
 TOA_API = "https://theorangealliance.org/api"
 
 app = FastAPI(title="VITE · BioBuzz Alliance Matrix", version="2.0.0")
+_extra_origins = [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8000", "http://localhost:8000"],
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8000", "http://localhost:8000", *_extra_origins],
     allow_methods=["*"],
     allow_headers=["*"],
 )
