@@ -35,6 +35,21 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 
 Откройте `http://127.0.0.1:8000`.
 
+## Android-приложение
+
+Обёртка Capacitor 8 над тем же React-интерфейсом: `frontend/android/`. Скаутинг хранится на телефоне, реальные ивенты BIOBUZZ загружаются напрямую из FTCScout (сервер не нужен). Кнопки FIRST Events API работают только при задеплоенном сервере (`VITE_API_URL`).
+
+Нужны Android SDK (Android Studio) и JDK 21 (Gradle 8.14 не запускается на JDK 25).
+
+```powershell
+cd frontend
+$env:JAVA_HOME = "C:\путь\к\jdk-21"
+npm run android:apk      # сборка веба (--mode app) + cap sync + gradlew assembleDebug
+adb install -r androidppuild\outputspk\debugpp-debug.apk
+```
+
+Открыть проект в Android Studio: `npx cap open android`.
+
 ## API интеграции
 
 ### FTCScout.org (бесплатно, без ключа)

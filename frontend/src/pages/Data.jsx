@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
+import { eventStats, playedEvents as fetchPlayedEvents } from "../lib/ftcscout";
 import { makeSeed } from "../lib/model";
 import { bool, CSV_COLUMNS, csvEsc, download, parseCSV } from "../lib/store";
 
@@ -105,7 +106,7 @@ export default function Data({ db, setDb, toast }) {
 
   async function findPlayedEvents() {
     try {
-      const data = await apiJson(`/api/ftcscout/played-events?season=${encodeURIComponent(season)}`);
+      const data = await fetchPlayedEvents(season);
       setPlayedEvents(data.events || []);
       if (!scoutEvent && data.events?.[0]) setScoutEvent(data.events[0].code);
       toast(`Ивентов с результатами: ${data.count}.`);
@@ -118,7 +119,7 @@ export default function Data({ db, setDb, toast }) {
   async function importScoutEvent() {
     if (!scoutEvent) return;
     try {
-      const ev = await apiJson(`/api/ftcscout/event/${encodeURIComponent(scoutEvent)}?season=${encodeURIComponent(season)}`);
+      const ev = await eventStats(scoutEvent, season);
       const fresh = db.meta.demo;
       const teams = fresh ? [] : [...db.teams];
       ev.teams.forEach((o) => {
@@ -425,7 +426,7 @@ export default function Data({ db, setDb, toast }) {
               <select className={inputClass("mt-2")} value={scoutEvent} onChange={(e) => setScoutEvent(e.target.value)} aria-label="Ивент FTCScout">
                 {playedEvents.map((e) => (
                   <option key={e.code} value={e.code}>
-                    {e.code} · {e.name} · {e.location?.city || ""} {e.start}
+                    {e.start} · {e.code} · {e.name} · {[e.location?.city, e.location?.country].filter(Boolean).join(", ")}
                   </option>
                 ))}
               </select>

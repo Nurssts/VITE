@@ -1,0 +1,8 @@
+{
+  "appId": "app.vite.biobuzz",
+  "appName": "VITE BioBuzz",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#0d0c0a"
+  }
+}

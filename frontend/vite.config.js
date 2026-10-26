@@ -1,9 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+// `vite build --mode app` builds for the Android app (Capacitor), which loads files relative to the bundle.
+export default defineConfig(({ command, mode }) => ({
   plugins: [react()],
-  base: process.env.NODE_ENV === 'production' ? '/VITE/' : '/',
+  base: mode === "app" ? "./" : command === "build" ? "/VITE/" : "/",
   server: {
     port: 5173,
     proxy: {
@@ -17,4 +18,4 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
-});
+}));

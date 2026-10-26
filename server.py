@@ -481,7 +481,7 @@ FTCSCOUT_GQL = "https://api.ftcscout.org/graphql"
 
 PLAYED_EVENTS_QUERY = """
 query PlayedEvents($season: Int!) {
-  eventsSearch(season: $season, hasMatches: true, limit: 200) {
+  eventsSearch(season: $season, hasMatches: true) {
     code name start end type location { city country }
   }
 }

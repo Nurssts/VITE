@@ -9,7 +9,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   </React.StrictMode>
 );
 
-if (import.meta.env.PROD && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
+if (import.meta.env.PROD && !window.Capacitor?.isNativePlatform?.() && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).catch(() => {});
   });

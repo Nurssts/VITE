@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VITE BioBuzz</string>
+    <string name="title_activity_main">VITE BioBuzz</string>
+    <string name="package_name">app.vite.biobuzz</string>
+    <string name="custom_url_scheme">app.vite.biobuzz</string>
+</resources>
