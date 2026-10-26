@@ -170,3 +170,16 @@ export const TRANSLATIONS = {
 export function t(lang, key, fallback = "") {
   return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS["en"]?.[key] ?? fallback;
 }
+
+
+// ── tr(): translate hardcoded Russian UI strings when English is selected ──
+import { EN } from "./en";
+
+let CURRENT_LANG = "ru";
+export function setLang(lang) {
+  CURRENT_LANG = lang || "ru";
+}
+export function tr(text) {
+  if (CURRENT_LANG !== "en") return text;
+  return EN[text] ?? text;
+}

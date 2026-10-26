@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 export function Button({ variant = "primary", className = "", children, ...props }) {
   const styles = {
     primary:
@@ -58,8 +59,8 @@ export function DemoBanner({ demo }) {
       className="mb-4 flex gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300"
       role="status"
     >
-      <strong className="text-zinc-100">Учебные данные.</strong>
-      <span>Названия команд и матчи вымышлены и помечены. Импортируйте свой скаутинг или удалите демо в разделе «Данные».</span>
+      <strong className="text-zinc-100">{tr("Учебные данные.")}</strong>
+      <span>{tr("Названия команд и матчи вымышлены и помечены. Импортируйте свой скаутинг или удалите демо в разделе «Данные».")}</span>
     </div>
   );
 }

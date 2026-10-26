@@ -1,7 +1,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button, DemoBanner, Kpi, Panel } from "../components/ui";
 import { allStats, avg, fmt, MODEL_VERSION, priority } from "../lib/model";
-import { t } from "../lib/i18n";
+import { t, tr } from "../lib/i18n";
 
 export default function Overview({ db, setPage, lang = "ru" }) {
   const ss = allStats(db);
@@ -113,7 +113,7 @@ export default function Overview({ db, setPage, lang = "ru" }) {
                     <span className="ml-1 text-zinc-600 text-xs">± {fmt(s.sd)}</span>
                   </td>
                   <td className="pr-4 text-zinc-400">{s.count}</td>
-                  <td className="pr-4 text-zinc-400">{priority(s)}</td>
+                  <td className="pr-4 text-zinc-400">{tr(priority(s))}</td>
                   <td className="text-zinc-400">{s.confidence}</td>
                 </tr>
               ))}

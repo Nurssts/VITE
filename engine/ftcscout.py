@@ -182,3 +182,44 @@ async def get_event_teams(season: int, code: str) -> dict[str, Any]:
             })
         return {"name": event.get("name") or "", "teams": teams}
     raise RuntimeError(last_error)
+
+
+_EVENT_FIELDS = [
+    "code name start end location { city state country }",
+    "code name start end",
+    "code name",
+]
+
+
+async def _gql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(GRAPHQL_URL, json={"query": query, "variables": variables})
+    try:
+        body = r.json()
+    except Exception:
+        raise RuntimeError(f"HTTP {r.status_code}: not JSON")
+    if body.get("errors"):
+        raise RuntimeError(body["errors"][0].get("message", "GraphQL error"))
+    return body.get("data") or {}
+
+
+async def list_events(season: int) -> dict[str, Any]:
+    """All events of a season. Tries several query shapes; reports the real error if all fail."""
+    errors: list[str] = []
+    for fields in _EVENT_FIELDS:
+        for root, args in (
+            ("eventsSearch", "(season: $season, limit: 1000)"),
+            ("eventsSearch", "(season: $season)"),
+        ):
+            query = f"query($season: Int!) {{ {root}{args} {{ {fields} }} }}"
+            try:
+                data = await _gql(query, {"season": season})
+                events = data.get(root) or []
+                for e in events:
+                    loc = e.get("location")
+                    if isinstance(loc, dict):
+                        e["location"] = ", ".join(x for x in (loc.get("city"), loc.get("state"), loc.get("country")) if x)
+                return {"events": events, "error": None}
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+    return {"events": [], "error": " | ".join(dict.fromkeys(errors))[:400]}

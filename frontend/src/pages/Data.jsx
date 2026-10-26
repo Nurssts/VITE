@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 import { useState } from "react";
 import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
 import { makeSeed } from "../lib/model";
@@ -60,15 +61,15 @@ export default function Data({ db, setDb, toast }) {
 
   function importCsv(text) {
     const data = parseCSV(text);
-    if (!data.length) throw Error("В CSV нет записей.");
-    if (!data[0].teamNumber && !data[0].teamId) throw Error("Нужна колонка teamNumber.");
+    if (!data.length) throw Error(tr("В CSV нет записей."));
+    if (!data[0].teamNumber && !data[0].teamId) throw Error(tr("Нужна колонка teamNumber."));
     const next = { ...db, teams: [...db.teams], records: [...db.records], meta: { ...db.meta, demo: false } };
     data.forEach((x) => {
       const no = String(x.teamNumber || x.teamId || "").trim();
       if (!no) return;
       let t = next.teams.find((t) => t.number === no || t.id === no);
       if (!t) {
-        t = { id: no, number: no, name: x.teamName || `Команда ${no}`, region: x.region || "", style: "Импортировано", notes: "" };
+        t = { id: no, number: no, name: x.teamName || `${tr("Команда")} ${no}`, region: x.region || "", style: tr("Импортировано"), notes: "" };
         next.teams.push(t);
       }
       next.records.push({
@@ -101,27 +102,27 @@ export default function Data({ db, setDb, toast }) {
       });
     });
     setDb(next);
-    toast("CSV импортирован.");
+    toast(tr("CSV импортирован."));
   }
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Импорт и экспорт</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-500">FIRST Events API и TOA работают через локальный прокси. Ключи не вводятся в браузер (кроме кода ивента).</p>
+      <h1 className="text-3xl font-semibold tracking-tight">{tr("Импорт и экспорт")}</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-500">{tr("FIRST Events API и TOA работают через локальный прокси. Ключи не вводятся в браузер (кроме кода ивента).")}</p>
       <DemoBanner demo={db.meta.demo} />
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <Panel>
-          <h2 className="text-sm font-semibold">CSV скаутинг</h2>
-          <p className="mt-2 text-sm text-zinc-400">Шаблон совместим с прежней версией; добавлены цикл и траектория.</p>
+          <h2 className="text-sm font-semibold">{tr("CSV скаутинг")}</h2>
+          <p className="mt-2 text-sm text-zinc-400">{tr("Шаблон совместим с прежней версией; добавлены цикл и траектория.")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => exportCsv(db.records)}>
-              Экспорт наблюдений
+              {tr("Экспорт наблюдений")}
             </Button>
             <Button variant="secondary" onClick={() => exportCsv([])}>
-              Пустой шаблон
+              {tr("Пустой шаблон")}
             </Button>
             <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-800 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400">
-              Импорт CSV
+              {tr("Импорт CSV")}
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -141,14 +142,14 @@ export default function Data({ db, setDb, toast }) {
           </div>
         </Panel>
         <Panel>
-          <h2 className="text-sm font-semibold">JSON резервная копия</h2>
-          <p className="mt-2 text-sm text-zinc-400">Команды, драфт и все наблюдения этого устройства.</p>
+          <h2 className="text-sm font-semibold">{tr("JSON резервная копия")}</h2>
+          <p className="mt-2 text-sm text-zinc-400">{tr("Команды, драфт и все наблюдения этого устройства.")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => download("vite-biobuzz-backup.json", JSON.stringify(db, null, 2), "application/json")}>
-              Скачать JSON
+              {tr("Скачать JSON")}
             </Button>
             <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-800 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400">
-              Восстановить
+              {tr("Восстановить")}
               <input
                 type="file"
                 accept=".json"
@@ -158,10 +159,10 @@ export default function Data({ db, setDb, toast }) {
                   if (!f) return;
                   try {
                     const next = JSON.parse(await f.text());
-                    if (!Array.isArray(next.teams) || !Array.isArray(next.records)) throw Error("Это не резервная копия VITE.");
-                    if (!confirm("Заменить текущую базу?")) return;
+                    if (!Array.isArray(next.teams) || !Array.isArray(next.records)) throw Error(tr("Это не резервная копия VITE."));
+                    if (!confirm(tr("Заменить текущую базу?"))) return;
                     setDb({ ...next, meta: { ...next.meta, demo: false } });
-                    toast("Резервная копия восстановлена.");
+                    toast(tr("Резервная копия восстановлена."));
                   } catch (err) {
                     toast(err.message, true);
                   }
@@ -174,13 +175,13 @@ export default function Data({ db, setDb, toast }) {
         <Panel>
           <h2 className="text-sm font-semibold">FIRST Events API</h2>
           <p className="mt-2 text-sm text-zinc-400">
-            Credentials задаются только в окружении сервера: FTC_API_USERNAME / FTC_API_TOKEN. Коммерческое использование данных FIRST запрещено их условиями.
+            {tr("Credentials задаются только в окружении сервера: FTC_API_USERNAME / FTC_API_TOKEN. Коммерческое использование данных FIRST запрещено их условиями.")}
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <Field label="Сезон">
+            <Field label={tr("Сезон")}>
               <input className={inputClass()} value={season} onChange={(e) => setSeason(e.target.value)} />
             </Field>
-            <Field label="Код ивента">
+            <Field label={tr("Код ивента")}>
               <input className={inputClass()} value={code} onChange={(e) => setCode(e.target.value)} />
             </Field>
           </div>
@@ -191,26 +192,26 @@ export default function Data({ db, setDb, toast }) {
                 try {
                   const data = await apiJson("/api/ftc/events?season=" + encodeURIComponent(season));
                   setEvents(data.events || []);
-                  toast(`Ивентов: ${(data.events || []).length}`);
+                  toast(`${tr("Ивентов")}: ${(data.events || []).length}`);
                 } catch (e) {
                   toast(e.message, true);
                 }
               }}
             >
-              Список ивентов
+              {tr("Список ивентов")}
             </Button>
             <Button
               variant="secondary"
               onClick={async () => {
                 try {
                   const s = await apiJson("/api/health");
-                  setOut(s.official_api_configured ? `Подключено: ${s.sources.first}` : "Сервер есть, но FIRST credentials не заданы.");
+                  setOut(s.official_api_configured ? `${tr("Подключено")}: ${s.sources.first}` : tr("Сервер есть, но FIRST credentials не заданы."));
                 } catch (e) {
                   setOut(e.message);
                 }
               }}
             >
-              Проверить
+              {tr("Проверить")}
             </Button>
             <Button
               onClick={async () => {
@@ -221,7 +222,7 @@ export default function Data({ db, setDb, toast }) {
                   ]);
                   const officialTeams = teams.teams || [];
                   const next = { ...db, teams: [...db.teams], records: db.records, meta: { ...db.meta } };
-                  if (next.meta.demo && confirm("Заменить учебные данные официальным списком команд?")) {
+                  if (next.meta.demo && confirm(tr("Заменить учебные данные официальным списком команд?"))) {
                     next.teams = [];
                     next.records = [];
                     next.meta.demo = false;
@@ -254,13 +255,13 @@ export default function Data({ db, setDb, toast }) {
                     if (!next.draft?.captain && next.teams[0]) next.draft = { ...(next.draft || {}), captain: next.teams[0].id, picked: [], removed: [] };
                     setDb(next);
                   }
-                  setOut(`Команд: ${officialTeams.length}. Квалификаций в ответе: ${(matches.matches || []).length}. Официальный счёт не подменяет скаутинг робота.`);
+                  setOut(`${tr("Команд")}: ${officialTeams.length}. ${tr("Квалификаций в ответе")}: ${(matches.matches || []).length}. ${tr("Официальный счёт не подменяет скаутинг робота.")}`);
                 } catch (e) {
                   toast(e.message, true);
                 }
               }}
             >
-              Загрузить команды и матчи
+              {tr("Загрузить команды и матчи")}
             </Button>
           </div>
           {events.length ? (
@@ -269,7 +270,7 @@ export default function Data({ db, setDb, toast }) {
               onChange={(e) => setCode(e.target.value)}
               value={code}
             >
-              <option value="">Выберите ивент</option>
+              <option value="">{tr("Выберите ивент")}</option>
               {events.map((e) => (
                 <option key={e.code || e.eventCode} value={e.code || e.eventCode}>
                   {e.name || e.eventName} · {e.code || e.eventCode}
@@ -280,9 +281,9 @@ export default function Data({ db, setDb, toast }) {
         </Panel>
         <Panel>
           <h2 className="text-sm font-semibold">The Orange Alliance</h2>
-          <p className="mt-2 text-sm text-zinc-400">Ключ TOA_API_KEY задаётся на сервере. Здесь только публичный event key.</p>
+          <p className="mt-2 text-sm text-zinc-400">{tr("Ключ TOA_API_KEY задаётся на сервере. Здесь только публичный event key.")}</p>
           <Field label="TOA event key">
-            <input className={inputClass()} value={toaKey} onChange={(e) => setToaKey(e.target.value)} placeholder="например 2526-CMP-DET" />
+            <input className={inputClass()} value={toaKey} onChange={(e) => setToaKey(e.target.value)} placeholder={tr("например 2526-CMP-DET")} />
           </Field>
           <Button
             className="mt-3"
@@ -290,31 +291,31 @@ export default function Data({ db, setDb, toast }) {
             onClick={async () => {
               try {
                 const data = await apiJson(`/api/toa/event/${encodeURIComponent(toaKey)}/matches`);
-                setOut(`TOA вернул записей: ${Array.isArray(data) ? data.length : JSON.stringify(data).slice(0, 120)}. Это публичные матчи, не скаутинг.`);
+                setOut(`${tr("TOA вернул записей")}: ${Array.isArray(data) ? data.length : JSON.stringify(data).slice(0, 120)}. ${tr("Это публичные матчи, не скаутинг.")}`);
               } catch (e) {
                 toast(e.message, true);
               }
             }}
           >
-            Загрузить матчи TOA
+            {tr("Загрузить матчи TOA")}
           </Button>
         </Panel>
         <Panel>
           <h2 className="text-sm font-semibold">FTCScout.org API</h2>
-          <p className="mt-2 text-sm text-zinc-400">Публичный API команд, рейтингов и матчей. Аутентификация не требуется.</p>
+          <p className="mt-2 text-sm text-zinc-400">{tr("Публичный API команд, рейтингов и матчей. Аутентификация не требуется.")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
               variant="secondary"
               onClick={async () => {
                 try {
                   const data = await apiJson("/api/ftcscout/teams");
-                  setOut(`Команд: ${data.count}. Это публичный список команд FTCScout.`);
+                  setOut(`${tr("Команд")}: ${data.count}. ${tr("Это публичный список команд FTCScout.")}`);
                 } catch (e) {
                   toast(e.message, true);
                 }
               }}
             >
-              Все команды
+              {tr("Все команды")}
             </Button>
             <Button
               variant="secondary"
@@ -347,7 +348,7 @@ export default function Data({ db, setDb, toast }) {
       </div>
       {out ? <p className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-600 shadow-sm">{out}</p> : null}
       <Panel className="mt-4">
-        <h2 className="text-sm font-semibold text-zinc-900">Настройки турнира</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">{tr("Настройки турнира")}</h2>
         <form
           className="mt-3 grid gap-3 sm:grid-cols-3"
           onSubmit={(e) => {
@@ -355,33 +356,33 @@ export default function Data({ db, setDb, toast }) {
             if (!consent) return;
             const x = Object.fromEntries(new FormData(e.target).entries());
             setDb({ ...db, meta: { ...db.meta, eventName: x.eventName, eventCode: x.eventCode, season: x.season, demo: false } });
-            toast("Настройки сохранены.");
+            toast(tr("Настройки сохранены."));
           }}
         >
-          <Field label="Название">
+          <Field label={tr("Название")}>
             <input className={inputClass()} name="eventName" defaultValue={db.meta.eventName} />
           </Field>
-          <Field label="Код">
+          <Field label={tr("Код")}>
             <input className={inputClass()} name="eventCode" defaultValue={db.meta.eventCode} />
           </Field>
-          <Field label="Сезон">
+          <Field label={tr("Сезон")}>
             <input className={inputClass()} name="season" defaultValue={db.meta.season} />
           </Field>
           <label className="sm:col-span-3 flex gap-2 text-sm cursor-pointer">
             <input type="checkbox" className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-            Сохраняю только данные турнира, без персональных сведений учеников.
+            {tr("Сохраняю только данные турнира, без персональных сведений учеников.")}
           </label>
-          <Button type="submit">Сохранить</Button>
+          <Button type="submit">{tr("Сохранить")}</Button>
         </form>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             variant="danger"
             onClick={() => {
-              if (!confirm("Удалить все локальные команды и записи? Сначала скачайте JSON.")) return;
+              if (!confirm(tr("Удалить все локальные команды и записи? Сначала скачайте JSON."))) return;
               setDb({ version: 2, meta: { demo: false, eventName: "", eventCode: "", season: "2026-2027", updatedAt: new Date().toISOString() }, teams: [], records: [], draft: { captain: "", picked: [], removed: [] } });
             }}
           >
-            Удалить локальные данные
+            {tr("Удалить локальные данные")}
           </Button>
           <Button
             variant="secondary"
@@ -395,7 +396,7 @@ export default function Data({ db, setDb, toast }) {
               });
             }}
           >
-            Восстановить демо
+            {tr("Восстановить демо")}
           </Button>
         </div>
       </Panel>

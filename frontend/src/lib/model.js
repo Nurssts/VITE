@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 export const MODEL_VERSION = "BIOBUZZ TU05 · 15.10.2026";
 export const STORE_KEY = "vite-biobuzz-matrix-v2";
 export const PREFS_KEY = "vite-biobuzz-prefs-v1";
@@ -166,7 +167,7 @@ export function stats(db, t) {
     hiveSuccess: avg(rs.map((x) => num(x.hiveSuccess)).filter(Boolean)),
     flowerAccuracy: avg(rs.map((x) => num(x.flowerAccuracy)).filter(Boolean)),
     trajectories: rs.map((x) => x.autoTrajectory || "unknown"),
-    confidence: count >= 8 ? "Высокая" : count >= 4 ? "Средняя" : count ? "Низкая" : "Нет данных",
+    confidence: count >= 8 ? tr("Высокая") : count >= 4 ? tr("Средняя") : count ? tr("Низкая") : tr("Нет данных"),
     consistency,
     profile: {
       auto: clamp((auto / 30) * 100, 0, 100),
@@ -192,10 +193,10 @@ export function roleLabel(s) {
   const hive = s.profile.hive;
   const flower = s.profile.flower;
   const auto = s.profile.auto;
-  if (hive >= flower + 12 && hive >= 45) return "Hive-специалист";
-  if (flower >= hive + 12 && flower >= 40) return "Flower / Endgame-специалист";
+  if (hive >= flower + 12 && hive >= 45) return tr("Hive-специалист");
+  if (flower >= hive + 12 && flower >= 40) return tr("Flower / Endgame-специалист");
   if (auto >= 55 && hive >= 40) return "Auto-Hive";
-  return "Сбалансированный";
+  return tr("Сбалансированный");
 }
 
 function modeTraj(values) {
@@ -216,18 +217,18 @@ export function collisionCheck(a, b) {
   const reasons = [];
   if (sameLane && bothAuto) {
     risk += 42;
-    reasons.push(`Одинаковая траектория автонома (${ta}): риск столкновения на старте.`);
+    reasons.push(tr("Одинаковая траектория автонома ({ta}): риск столкновения на старте.").replace("{ta}", ta));
   }
   if (hiveOverlap) {
     risk += 28;
-    reasons.push("Оба робота активно TIP-ят HIVE в Auto — конкуренция за одну конструкцию.");
+    reasons.push(tr("Оба робота активно TIP-ят HIVE в Auto — конкуренция за одну конструкцию."));
   }
   if (bothAuto && !sameLane && ta !== "unknown" && tb !== "unknown") {
     risk += 8;
-    reasons.push("Оба сильные в Auto, но разные зоны — столкновение менее вероятно.");
+    reasons.push(tr("Оба сильные в Auto, но разные зоны — столкновение менее вероятно."));
   }
   risk = clamp(risk, 0, 100);
-  if (!reasons.length) reasons.push("По скаутингу нет явного пересечения автономов. Это оценка, не гарантия.");
+  if (!reasons.length) reasons.push(tr("По скаутингу нет явного пересечения автономов. Это оценка, не гарантия."));
   return { score: Math.round(risk * 10) / 10, level: risk >= 55 ? "high" : risk >= 28 ? "medium" : "low", reasons, lanes: [ta, tb] };
 }
 
@@ -299,18 +300,18 @@ export function simulate(db, ids, iterations = 1000) {
   const margin = 1.96 * Math.sqrt((p * (1 - p)) / iterations) * 100;
   const risks = [];
   if (left.a.count + left.b.count + right.a.count + right.b.count < 8) {
-    risks.push("Мало наблюдений: интервал неопределённости широкий. Решение драфта стоит сверять с живым скаутингом.");
+    risks.push(tr("Мало наблюдений: интервал неопределённости широкий. Решение драфта стоит сверять с живым скаутингом."));
   }
   if (loss && flowerLoss / loss >= 0.55) {
-    risks.push(`В ${Math.round((flowerLoss / loss) * 100)}% смоделированных поражений у Альянса 1 слабее вклад в FLOWER (последняя минута).`);
+    risks.push(tr("В {n}% смоделированных поражений у Альянса 1 слабее вклад в FLOWER (последняя минута).").replace("{n}", Math.round((flowerLoss / loss) * 100)));
   }
   if (loss && hiveLoss / loss >= 0.55) {
-    risks.push(`В ${Math.round((hiveLoss / loss) * 100)}% поражений узкое место — контроль HIVE.`);
+    risks.push(tr("В {n}% поражений узкое место — контроль HIVE.").replace("{n}", Math.round((hiveLoss / loss) * 100)));
   }
   if (left.collision.level !== "low") risks.push("Autonomous Collision Check: " + left.collision.reasons[0]);
-  if (left.dnfIndex >= 0.08) risks.push("Индекс надёжности снижен: в скаутинге есть отключения/DNF.");
+  if (left.dnfIndex >= 0.08) risks.push(tr("Индекс надёжности снижен: в скаутинге есть отключения/DNF."));
   if (!risks.length) {
-    risks.push("Явного узкого места по FLOWER/HIVE не видно. Модель не учитывает полностью защиту, конкуренцию за элементы и решения судей.");
+    risks.push(tr("Явного узкого места по FLOWER/HIVE не видно. Модель не учитывает полностью защиту, конкуренцию за элементы и решения судей."));
   }
   return {
     iterations,
@@ -359,5 +360,5 @@ export function initials(t) {
 }
 
 export function teamLabel(t) {
-  return t ? `${t.number} · ${t.name}` : "Команда не выбрана";
+  return t ? `${t.number} · ${t.name}` : tr("Команда не выбрана");
 }

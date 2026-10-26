@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 import { useMemo, useState } from "react";
 import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
 import { allStats, fmt, initials, priority, roleLabel, stats } from "../lib/model";
@@ -22,7 +23,7 @@ export default function Teams({ db, setPage, onAddTeam }) {
     return (
       <div>
         <Button variant="ghost" onClick={() => setActive(null)}>
-          ← Все команды
+          {tr("← Все команды")}
         </Button>
         <div className="mt-4 flex items-center gap-3">
           <span className="grid h-12 w-12 place-items-center rounded-xl bg-white text-sm font-bold text-black" aria-hidden="true">
@@ -31,14 +32,14 @@ export default function Teams({ db, setPage, onAddTeam }) {
           <div>
             <h1 className="text-2xl font-semibold">{t.name}</h1>
             <p className="text-sm text-zinc-500">
-              {t.number} · {t.region || "регион не указан"} · {roleLabel(s)}
+              {t.number} · {t.region || tr("регион не указан")} · {roleLabel(s)}
             </p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
           {[
-            ["Наблюдений", s.count],
-            ["Оценка", fmt(s.mean)],
+            [tr("Наблюдений"), s.count],
+            [tr("Оценка"), fmt(s.mean)],
             ["σ", `± ${fmt(s.sd)}`],
             ["DNF", `${Math.round(s.dnf * 100)}%`],
           ].map(([l, v]) => (
@@ -49,7 +50,7 @@ export default function Teams({ db, setPage, onAddTeam }) {
           ))}
         </div>
         <Panel className="mt-4">
-          <h2 className="mb-3 text-sm font-semibold">Профиль 0–100</h2>
+          <h2 className="mb-3 text-sm font-semibold">{tr("Профиль 0–100")}</h2>
           {["auto", "hive", "flower", "reliability"].map((k) => (
             <div key={k} className="mb-3 grid grid-cols-[100px_1fr_36px] items-center gap-2 text-xs">
               <span className="uppercase text-zinc-500">{k}</span>
@@ -59,7 +60,7 @@ export default function Teams({ db, setPage, onAddTeam }) {
               <span className="text-right">{Math.round(s.profile[k])}</span>
             </div>
           ))}
-          <p className="chart-note">Оценка вклада — сумма наблюдаемых действий, а не официальный счёт.</p>
+          <p className="chart-note">{tr("Оценка вклада — сумма наблюдаемых действий, а не официальный счёт.")}</p>
         </Panel>
       </div>
     );
@@ -69,19 +70,19 @@ export default function Teams({ db, setPage, onAddTeam }) {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Команды</h1>
-          <p className="mt-1 text-sm text-zinc-500">Профили, стабильность и объём скаутинга.</p>
+          <h1 className="text-3xl font-semibold tracking-tight">{tr("Команды")}</h1>
+          <p className="mt-1 text-sm text-zinc-500">{tr("Профили, стабильность и объём скаутинга.")}</p>
         </div>
-        <Button onClick={() => setOpen(true)}>+ Добавить команду</Button>
+        <Button onClick={() => setOpen(true)}>{tr("+ Добавить команду")}</Button>
       </div>
       <DemoBanner demo={db.meta.demo} />
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <input className={inputClass("sm:max-w-xs")} placeholder="Найти команду" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className={inputClass("sm:max-w-xs")} placeholder={tr("Найти команду")} value={q} onChange={(e) => setQ(e.target.value)} />
         <select className={inputClass("sm:max-w-[180px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400")} value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">Все приоритеты</option>
+          <option value="all">{tr("Все приоритеты")}</option>
           <option value="A">A</option>
-          <option value="Б">Б</option>
-          <option value="В">В</option>
+          <option value="Б">{tr("Б")}</option>
+          <option value="В">{tr("В")}</option>
         </select>
       </div>
       <div className="grid gap-2">
@@ -98,14 +99,14 @@ export default function Teams({ db, setPage, onAddTeam }) {
             <div className="text-sm">
               {fmt(s.mean)} <span className="text-zinc-500">± {fmt(s.sd)}</span>
             </div>
-            <div className="text-sm">{s.count} матч.</div>
-            <div className="text-sm">{priority(s)}</div>
+            <div className="text-sm">{s.count} {tr("матч.")}</div>
+            <div className="text-sm">{tr(priority(s))}</div>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setActive(s.team.id)}>
-                Профиль
+                {tr("Профиль")}
               </Button>
               <Button variant="ghost" onClick={() => setPage("scouting")}>
-                + Матч
+                {tr("+ Матч")}
               </Button>
             </div>
           </article>
@@ -123,25 +124,25 @@ export default function Teams({ db, setPage, onAddTeam }) {
               setOpen(false);
             }}
           >
-            <h2 className="text-lg font-semibold">Добавить команду</h2>
+            <h2 className="text-lg font-semibold">{tr("Добавить команду")}</h2>
             <div className="mt-3 grid gap-3">
-              <Field label="Номер *">
+              <Field label={tr("Номер *")}>
                 <input className={inputClass()} name="number" required />
               </Field>
-              <Field label="Название *">
+              <Field label={tr("Название *")}>
                 <input className={inputClass()} name="name" required />
               </Field>
-              <Field label="Регион">
+              <Field label={tr("Регион")}>
                 <input className={inputClass()} name="region" />
               </Field>
               <label className="flex gap-2 text-sm cursor-pointer">
-                <input type="checkbox" name="consent" required className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" />Я подтверждаю, что это публичные данные команды FTC, без персональных данных учеников.
+                <input type="checkbox" name="consent" required className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" />{tr("Я подтверждаю, что это публичные данные команды FTC, без персональных данных учеников.")}
               </label>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-                  Отмена
+                  {tr("Отмена")}
                 </Button>
-                <Button type="submit">Добавить</Button>
+                <Button type="submit">{tr("Добавить")}</Button>
               </div>
             </div>
           </form>

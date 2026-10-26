@@ -1,3 +1,4 @@
+import { tr } from "../lib/i18n";
 import {
   BarChart3,
   ClipboardList,
@@ -43,7 +44,7 @@ function Sidebar({ nav, page, setPage, eventLabel, lang, onClose }) {
           type="button"
           className="flex items-center gap-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-600 rounded-xl"
           onClick={() => { setPage("overview"); onClose?.(); }}
-          aria-label="VITE, перейти к обзору"
+          aria-label={tr("VITE, перейти к обзору")}
         >
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-white shadow-[0_0_20px_rgba(255,255,255,0.1)]">
             <span className="text-sm font-black text-black leading-none">V</span>
@@ -58,7 +59,7 @@ function Sidebar({ nav, page, setPage, eventLabel, lang, onClose }) {
             type="button"
             onClick={onClose}
             className="lg:hidden grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-white transition-colors"
-            aria-label="Закрыть меню"
+            aria-label={tr("Закрыть меню")}
           >
             <X size={16} aria-hidden="true" />
           </button>
@@ -175,7 +176,7 @@ export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru"
                 type="button"
                 className="lg:hidden grid h-8 w-8 place-items-center rounded-lg border border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
                 onClick={() => setMenuOpen(true)}
-                aria-label="Открыть меню"
+                aria-label={tr("Открыть меню")}
               >
                 <Menu size={16} aria-hidden="true" />
               </button>
@@ -220,7 +221,7 @@ export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru"
       {/* ── Mobile bottom tab bar (5 primary tabs) ── */}
       <nav
         className="fixed inset-x-0 bottom-0 z-30 flex border-t border-zinc-900 bg-zinc-950 lg:hidden"
-        aria-label="Мобильная навигация"
+        aria-label={tr("Мобильная навигация")}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {nav.slice(0, 5).map((item) => {
@@ -249,12 +250,12 @@ export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru"
           type="button"
           className="flex flex-1 flex-col items-center gap-1 py-3 text-[10px] font-medium text-zinc-600 hover:text-zinc-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-500"
           onClick={() => setMenuOpen(true)}
-          aria-label="Ещё"
+          aria-label={tr("Ещё")}
         >
           <div className="grid h-6 w-6 place-items-center rounded-lg">
             <Menu size={15} aria-hidden="true" />
           </div>
-          <span>Ещё</span>
+          <span>{tr("Ещё")}</span>
         </button>
       </nav>
 

@@ -1,3 +1,4 @@
+import { setLang, tr } from "./lib/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "./components/Layout";
 import { Button } from "./components/ui";
@@ -43,12 +44,12 @@ function LangSelect({ onSelect }) {
         {/* Language selector cards */}
         <div className="w-full animate-slide-up">
           <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.15em] text-zinc-600">
-            Select Language / Выберите язык
+            {tr("Select Language / Выберите язык")}
           </p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { code: "ru", label: "Русский", sub: "Russian" },
-              { code: "en", label: "English", sub: "Английский" },
+              { code: "ru", label: tr("Русский"), sub: "Russian" },
+              { code: "en", label: "English", sub: tr("Английский") },
             ].map(({ code, label, sub }) => (
               <button
                 key={code}
@@ -94,6 +95,7 @@ function EventSelect({ onSelect, lang }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const eventsCache = useRef({});
+  const [eventsError, setEventsError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -107,7 +109,7 @@ function EventSelect({ onSelect, lang }) {
       const { teams } = await loadEventTeams(year, eventCode);
       onSelect({ year, eventCode: eventCode.trim().toUpperCase(), eventName, teams: teamsToDb(teams) });
     } catch (err) {
-      setError((ru ? "Не удалось загрузить команды события. " : "Could not load the event's teams. ") + err.message);
+      setError((ru ? tr("Не удалось загрузить команды события. ") : "Could not load the event's teams. ") + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -124,7 +126,9 @@ function EventSelect({ onSelect, lang }) {
       const response = await fetch(baseUrl + `/api/ftcscout/events?season=${y}`, { headers: { Accept: "application/json" } });
       const data = await response.json().catch(() => ({}));
       eventsCache.current[y] = data.events || [];
+      setEventsError(data.error || (response.ok ? "" : `HTTP ${response.status}`));
     } catch (err) {
+      setEventsError(err.message);
       console.error("Search error:", err);
       eventsCache.current[y] = [];
     } finally {
@@ -207,7 +211,7 @@ function EventSelect({ onSelect, lang }) {
                   onChange={(e) => handleEventSearch(e.target.value)}
                   onFocus={() => runSearch(searchQuery)}
                   onBlur={() => setTimeout(() => setShowResults(false), 150)}
-                  placeholder={ru ? "Название, код или город (Алматы, Astana…)" : "Name, code or city (Almaty, Astana…)"}
+                  placeholder={ru ? tr("Название, код или город (Алматы, Astana…)") : "Name, code or city (Almaty, Astana…)"}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 pl-10 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 transition-all"
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
@@ -227,12 +231,16 @@ function EventSelect({ onSelect, lang }) {
                 <div className="absolute z-10 mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl animate-fade-in max-h-72 overflow-y-auto">
                   {searchResults.length === 0 ? (
                     <div className="px-4 py-3 text-sm text-zinc-500">
-                      {loading ? (ru ? "Загружаю события…" : "Loading events…") : ru ? "Ничего не найдено. Можно ввести код события ниже вручную." : "Nothing found. You can type the event code manually below."}
+                      {loading
+                        ? ru ? tr("Загружаю события…") : "Loading events…"
+                        : eventsError
+                          ? (ru ? tr("Не удалось загрузить список событий: ") : "Could not load the event list: ") + eventsError
+                          : ru ? tr("Ничего не найдено. Можно ввести код события ниже вручную.") : "Nothing found. You can type the event code manually below."}
                     </div>
                   ) : (
                     <>
                       <div className="px-4 pt-3 text-[11px] uppercase tracking-wider text-zinc-600">
-                        {!searchQuery ? (ru ? "Ближайшие события" : "Upcoming events") : searchResults[0].similar ? (ru ? "Похожие варианты" : "Similar results") : ru ? "Найдено" : "Matches"}
+                        {!searchQuery ? (ru ? tr("Ближайшие события") : "Upcoming events") : searchResults[0].similar ? (ru ? tr("Похожие варианты") : "Similar results") : ru ? tr("Найдено") : "Matches"}
                       </div>
                       {searchResults.map(({ event }, idx) => {
                         const loc = locText(event.location);
@@ -284,13 +292,13 @@ function EventSelect({ onSelect, lang }) {
               <div className="rounded-xl border border-red-900 bg-red-950/40 p-3 text-xs text-red-300">
                 {error}
                 <button type="button" onClick={skipLoading} className="mt-2 block underline">
-                  {ru ? "Продолжить с пустой базой (добавлю команды сам)" : "Continue with an empty database (I'll add teams myself)"}
+                  {ru ? tr("Продолжить с пустой базой (добавлю команды сам)") : "Continue with an empty database (I'll add teams myself)"}
                 </button>
               </div>
             ) : null}
 
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? (ru ? "Загружаю команды…" : "Loading teams…") : ru ? "Продолжить" : "Continue"}
+              {submitting ? (ru ? tr("Загружаю команды…") : "Loading teams…") : ru ? tr("Продолжить") : "Continue"}
             </Button>
           </div>
         </form>
@@ -306,6 +314,7 @@ function EventSelect({ onSelect, lang }) {
 export default function App() {
   const [prefs, setPrefsState] = useState(loadPrefs);
   const lang = prefs.lang || "en";  // Default to English
+  setLang(lang);
   const allowStorage = prefs.cookie.storage;
   const [db, setDbState] = useState(() => loadDb(allowStorage));
   const [page, setPage] = useState("overview");

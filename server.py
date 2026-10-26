@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from engine.db import init_db
-from engine.ftcscout import get_event_teams, get_all_teams, get_events, get_match_records, get_team_by_number, get_tep_records
+from engine.ftcscout import get_event_teams, list_events, get_all_teams, get_events, get_match_records, get_team_by_number, get_tep_records
 from engine.gemini import analyze_match_with_gemini, get_alliance_recommendation
 from engine.monte_carlo import simulate_match
 from engine.scoring import MODEL_VERSION
@@ -294,8 +294,9 @@ async def ftcscout_team(number: int) -> Any:
 @app.get("/api/ftcscout/events")
 async def ftcscout_events(season: int = Query(2026)) -> Any:
     """Fetch events for a season from FTCScout."""
-    events = await get_events(season)
-    return {"events": events, "season": season, "count": len(events)}
+    result = await list_events(season)
+    events = result["events"]
+    return {"events": events, "season": season, "count": len(events), "error": result["error"]}
 
 
 @app.get("/api/ftcscout/rankings")
