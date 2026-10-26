@@ -41,11 +41,12 @@ function LangSelect({ onSelect }) {
         {/* Language selector cards */}
         <div className="w-full animate-slide-up">
           <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.15em] text-zinc-600">
-            Select Language
+            Select Language / Выберите язык
           </p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { code: "en", label: "English", sub: "English" },
+              { code: "ru", label: "Русский", sub: "Russian" },
+              { code: "en", label: "English", sub: "Английский" },
             ].map(({ code, label, sub }) => (
               <button
                 key={code}
@@ -60,7 +61,7 @@ function LangSelect({ onSelect }) {
                 }`}
                 aria-label={`Select ${label}`}
               >
-                <span className="text-2xl">🇬🇧</span>
+                <span className="text-2xl">{code === "ru" ? "🇷🇺" : "🇬🇧"}</span>
                 <span className="text-base font-semibold">{label}</span>
                 <span className={`text-xs ${hovered === code ? "text-zinc-500" : "text-zinc-600"}`}>{sub}</span>
               </button>
@@ -248,14 +249,7 @@ function EventSelect({ onSelect, lang }) {
 }
 
 export default function App() {
-  const [prefs, setPrefsState] = useState(() => {
-    const loaded = loadPrefs();
-    // Force language to English if it was Russian
-    if (loaded.lang === "ru") {
-      loaded.lang = "en";
-    }
-    return loaded;
-  });
+  const [prefs, setPrefsState] = useState(loadPrefs);
   const lang = prefs.lang || "en";  // Default to English
   const allowStorage = prefs.cookie.storage;
   const [db, setDbState] = useState(() => loadDb(allowStorage));
