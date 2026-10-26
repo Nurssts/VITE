@@ -5,7 +5,7 @@ Requires GOOGLE_API_KEY environment variable.
 
 from typing import Any, List
 import asyncio
-import google.genai as genai
+import google.generativeai as genai
 from pydantic import BaseModel
 
 
@@ -36,8 +36,7 @@ async def analyze_match_with_gemini(
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
-        client = genai.Client(api_key=api_key)
-        model = "gemini-2.0-flash"
+        model = genai.GenerativeModel('gemini-1.5-pro')
 
         prompt = f"""
 You are an FTC Robotics expert analyzing BioBuzz season match data.
@@ -62,9 +61,8 @@ Format as JSON with keys: analysis, synergy_alliance1, synergy_alliance2, risks,
 
         # Run in thread pool to avoid blocking
         response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=model,
-            contents=prompt
+            model.generate_content,
+            prompt
         )
 
         return {
@@ -88,8 +86,7 @@ async def get_alliance_recommendation(
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
-        client = genai.Client(api_key=api_key)
-        model = "gemini-2.0-flash"
+        model = genai.GenerativeModel('gemini-1.5-pro')
 
         prompt = f"""
 You are an FTC Robotics expert recommending alliance partners for BioBuzz season.
@@ -109,9 +106,8 @@ Format as JSON with keys: recommendations (array with team, reasoning, synergy_s
 
         # Run in thread pool to avoid blocking
         response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=model,
-            contents=prompt
+            model.generate_content,
+            prompt
         )
 
         return {

@@ -4,5 +4,5 @@ pydantic>=2,<3
 uvicorn[standard]>=0.30,<1
 gql[all]>=3.5,<4
 aiohttp>=3.9,<4
-google-genai>=1.0,<2
+google-generativeai>=0.8,<1
 slowapi>=0.1.9,<1
