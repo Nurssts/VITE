@@ -4,14 +4,17 @@ Requires GOOGLE_API_KEY environment variable.
 """
 
 from typing import Any, List
-import google.generativeai as genai
+import asyncio
+import google.genai as genai
 from pydantic import BaseModel
+
 
 class MatchAnalysisRequest(BaseModel):
     alliance1_teams: List[str]
     alliance2_teams: List[str]
     scout_data: str
     season: str = "2026-2027"
+
 
 class AllianceRecommendation(BaseModel):
     alliance: str
@@ -29,9 +32,13 @@ async def analyze_match_with_gemini(
 ) -> dict[str, Any]:
     """Use Gemini AI to analyze match data and provide insights."""
     try:
-        genai.configure(api_key=None)  # Will read from GOOGLE_API_KEY env var
-        model = genai.GenerativeModel('gemini-1.5-pro')
-        
+        api_key = genai.configure(api_key=None)  # Will read from GOOGLE_API_KEY env var
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable not set")
+
+        client = genai.Client(api_key=api_key)
+        model = "gemini-2.0-flash"
+
         prompt = f"""
 You are an FTC Robotics expert analyzing BioBuzz season match data.
 
@@ -52,8 +59,14 @@ Please provide:
 
 Format as JSON with keys: analysis, synergy_alliance1, synergy_alliance2, risks, strategy, confidence
 """
-        
-        response = model.generate_content(prompt)
+
+        # Run in thread pool to avoid blocking
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=model,
+            contents=prompt
+        )
+
         return {
             "analysis": response.text,
             "alliance1_teams": alliance1_teams,
@@ -61,12 +74,7 @@ Format as JSON with keys: analysis, synergy_alliance1, synergy_alliance2, risks,
             "season": season
         }
     except Exception as e:
-        print(f"Gemini API error: {e}")
-        return {
-            "error": str(e),
-            "alliance1_teams": alliance1_teams,
-            "alliance2_teams": alliance2_teams
-        }
+        raise RuntimeError(f"Gemini API error: {e}") from e
 
 
 async def get_alliance_recommendation(
@@ -76,9 +84,13 @@ async def get_alliance_recommendation(
 ) -> dict[str, Any]:
     """Use Gemini AI to recommend alliance partners."""
     try:
-        genai.configure(api_key=None)
-        model = genai.GenerativeModel('gemini-1.5-pro')
-        
+        api_key = genai.configure(api_key=None)
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable not set")
+
+        client = genai.Client(api_key=api_key)
+        model = "gemini-2.0-flash"
+
         prompt = f"""
 You are an FTC Robotics expert recommending alliance partners for BioBuzz season.
 
@@ -94,8 +106,14 @@ Based on typical FTC BioBuzz roles (Hive specialist, Flower specialist, balanced
 
 Format as JSON with keys: recommendations (array with team, reasoning, synergy_score, risks)
 """
-        
-        response = model.generate_content(prompt)
+
+        # Run in thread pool to avoid blocking
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=model,
+            contents=prompt
+        )
+
         return {
             "recommendation": response.text,
             "my_team": my_team,
@@ -103,9 +121,4 @@ Format as JSON with keys: recommendations (array with team, reasoning, synergy_s
             "season": season
         }
     except Exception as e:
-        print(f"Gemini API error: {e}")
-        return {
-            "error": str(e),
-            "my_team": my_team,
-            "available_teams": available_teams
-        }
+        raise RuntimeError(f"Gemini API error: {e}") from e

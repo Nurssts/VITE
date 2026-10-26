@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -34,6 +37,10 @@ FIRST_API = "https://ftc-api.firstinspires.org/v2.0"
 TOA_API = "https://theorangealliance.org/api"
 
 app = FastAPI(title="VITE · BioBuzz Alliance Matrix", version="2.0.0")
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 _extra_origins = [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -299,8 +306,10 @@ async def ftcscout_rankings(season: int = Query(2027), skip: int = Query(0), tak
 
 
 # Gemini AI endpoints (requires GOOGLE_API_KEY environment variable)
+# Rate limited: 10 requests per minute per IP
 @app.post("/api/gemini/analyze-match")
-async def gemini_analyze_match(body: dict[str, Any]) -> Any:
+@limiter.limit("10/minute")
+async def gemini_analyze_match(request: Request, body: dict[str, Any]) -> Any:
     """Analyze match using Gemini AI."""
     try:
         result = await analyze_match_with_gemini(
@@ -315,7 +324,8 @@ async def gemini_analyze_match(body: dict[str, Any]) -> Any:
 
 
 @app.post("/api/gemini/alliance-recommendation")
-async def gemini_recommendation(body: dict[str, Any]) -> Any:
+@limiter.limit("10/minute")
+async def gemini_recommendation(request: Request, body: dict[str, Any]) -> Any:
     """Get alliance partner recommendations using Gemini AI."""
     try:
         result = await get_alliance_recommendation(

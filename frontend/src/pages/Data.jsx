@@ -10,7 +10,7 @@ async function apiJson(url) {
   const baseUrl = API_BASE || "";
   const response = await fetch(baseUrl + url, { headers: { Accept: "application/json" } });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Error(data.detail || `Сервер вернул ${response.status}.`);
+  if (!response.ok) throw Error(data.detail || `Server returned ${response.status}.`);
   return data;
 }
 

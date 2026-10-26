@@ -168,5 +168,5 @@ export const TRANSLATIONS = {
 };
 
 export function t(lang, key, fallback = "") {
-  return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS["ru"]?.[key] ?? fallback;
+  return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS["en"]?.[key] ?? fallback;
 }

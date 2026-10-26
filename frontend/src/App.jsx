@@ -41,12 +41,11 @@ function LangSelect({ onSelect }) {
         {/* Language selector cards */}
         <div className="w-full">
           <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.15em] text-zinc-600">
-            Select Language / Выберите язык
+            Select Language
           </p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { code: "ru", label: "Русский", sub: "Russian" },
-              { code: "en", label: "English", sub: "Английский" },
+              { code: "en", label: "English", sub: "English" },
             ].map(({ code, label, sub }) => (
               <button
                 key={code}
@@ -61,7 +60,7 @@ function LangSelect({ onSelect }) {
                 }`}
                 aria-label={`Select ${label}`}
               >
-                <span className="text-2xl">{code === "ru" ? "🇷🇺" : "🇬🇧"}</span>
+                <span className="text-2xl">🇧</span>
                 <span className="text-base font-semibold">{label}</span>
                 <span className={`text-xs ${hovered === code ? "text-zinc-500" : "text-zinc-600"}`}>{sub}</span>
               </button>
@@ -77,9 +76,96 @@ function LangSelect({ onSelect }) {
   );
 }
 
+/* ─── Event Selection Screen ─── */
+function EventSelect({ onSelect, lang }) {
+  const [year, setYear] = useState("2027");
+  const [eventCode, setEventCode] = useState("");
+  const [eventName, setEventName] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSelect({ year, eventCode, eventName });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black px-6">
+      {/* Background pattern */}
+      <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{
+        backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+        backgroundSize: "32px 32px"
+      }} />
+
+      <div className="relative flex flex-col items-center gap-6 w-full max-w-md">
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-white shadow-[0_0_30px_rgba(255,255,255,0.15)]">
+            <span className="text-xl font-black text-black leading-none">V</span>
+          </div>
+          <div className="text-center">
+            <div className="text-xl font-bold tracking-widest text-white">VITE</div>
+            <div className="text-xs text-zinc-500 mt-0.5">BioBuzz Alliance Matrix</div>
+          </div>
+        </div>
+
+        {/* Event form */}
+        <form onSubmit={handleSubmit} className="w-full">
+          <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.15em] text-zinc-600">
+            Select Tournament Event
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="mb-2 block text-xs font-medium text-zinc-400">Season Year</label>
+              <select
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+              >
+                <option value="2026">2026-2027</option>
+                <option value="2027">2027-2028</option>
+                <option value="2028">2028-2029</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-medium text-zinc-400">Event Code (optional)</label>
+              <input
+                type="text"
+                value={eventCode}
+                onChange={(e) => setEventCode(e.target.value)}
+                placeholder="e.g., ALMATY"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-medium text-zinc-400">Event Name (optional)</label>
+              <input
+                type="text"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                placeholder="e.g., Almaty Championship"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+              />
+            </div>
+
+            <Button type="submit" className="w-full">
+              Continue
+            </Button>
+          </div>
+        </form>
+
+        <p className="text-center text-[11px] text-zinc-700">
+          You can change this later in Settings
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [prefs, setPrefsState] = useState(loadPrefs);
-  const lang = prefs.lang || "ru";
+  const lang = prefs.lang || "en";  // Default to English
   const allowStorage = prefs.cookie.storage;
   const [db, setDbState] = useState(() => loadDb(allowStorage));
   const [page, setPage] = useState("overview");
@@ -179,6 +265,19 @@ export default function App() {
     return (
       <LangSelect
         onSelect={(code) => setPrefs({ ...prefs, lang: code })}
+      />
+    );
+  }
+
+  /* ── Show event picker if event not set yet ── */
+  if (!prefs.event?.set) {
+    return (
+      <EventSelect
+        lang={lang}
+        onSelect={({ year, eventCode, eventName }) => {
+          setPrefs({ ...prefs, event: { set: true, year, eventCode, eventName } });
+          setDb({ ...db, meta: { ...db.meta, eventCode, eventName } });
+        }}
       />
     );
   }
