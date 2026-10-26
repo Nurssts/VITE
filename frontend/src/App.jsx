@@ -11,6 +11,7 @@ import Scouting from "./pages/Scouting";
 import Settings from "./pages/Settings";
 import Teams from "./pages/Teams";
 import { loadEventTeams, teamsToDb } from "./lib/eventLoader";
+import { locText, searchEvents } from "./lib/eventSearch";
 import { loadDb, loadPrefs, persistDb, savePrefs } from "./lib/store";
 import { t } from "./lib/i18n";
 
@@ -115,39 +116,39 @@ function EventSelect({ onSelect, lang }) {
   const skipLoading = () =>
     onSelect({ year, eventCode: eventCode.trim().toUpperCase(), eventName, teams: [] });
 
-  const handleEventSearch = async (query) => {
-    setSearchQuery(query);
-    if (query.length < 2) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
-
+  const loadEvents = async (y) => {
+    if (eventsCache.current[y]) return eventsCache.current[y];
     setLoading(true);
     try {
       const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-      if (!eventsCache.current[year]) {
-        const response = await fetch((baseUrl || "") + `/api/ftcscout/events?season=${year}`, {
-          headers: { Accept: "application/json" }
-        });
-        const data = await response.json().catch(() => ({}));
-        eventsCache.current[year] = data.events || [];
-      }
-      const allEvents = eventsCache.current[year];
-
-      const filtered = allEvents.filter(event =>
-        (event.name || event.eventName || "").toLowerCase().includes(query.toLowerCase()) ||
-        (event.code || event.eventCode || "").toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 10);
-
-      setSearchResults(filtered);
-      setShowResults(true);
+      const response = await fetch(baseUrl + `/api/ftcscout/events?season=${y}`, { headers: { Accept: "application/json" } });
+      const data = await response.json().catch(() => ({}));
+      eventsCache.current[y] = data.events || [];
     } catch (err) {
       console.error("Search error:", err);
+      eventsCache.current[y] = [];
     } finally {
       setLoading(false);
     }
+    return eventsCache.current[y];
   };
+
+  const runSearch = async (query, y = year) => {
+    const all = await loadEvents(y);
+    setSearchResults(searchEvents(all, query));
+    setShowResults(true);
+  };
+
+  const handleEventSearch = (query) => {
+    setSearchQuery(query);
+    runSearch(query);
+  };
+
+  // season changed: re-run the search for the new season
+  useEffect(() => {
+    if (showResults) runSearch(searchQuery, year);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year]);
 
   const selectEvent = (event) => {
     setEventCode(event.code || event.eventCode || "");
@@ -204,7 +205,9 @@ function EventSelect({ onSelect, lang }) {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => handleEventSearch(e.target.value)}
-                  placeholder="Search by name or code..."
+                  onFocus={() => runSearch(searchQuery)}
+                  onBlur={() => setTimeout(() => setShowResults(false), 150)}
+                  placeholder={ru ? "Название, код или город (Алматы, Astana…)" : "Name, code or city (Almaty, Astana…)"}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 pl-10 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 transition-all"
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
@@ -219,20 +222,38 @@ function EventSelect({ onSelect, lang }) {
                 )}
               </div>
 
-              {/* Search results dropdown */}
-              {showResults && searchResults.length > 0 && (
-                <div className="absolute z-10 mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl animate-fade-in max-h-60 overflow-y-auto">
-                  {searchResults.map((event, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => selectEvent(event)}
-                      className="w-full px-4 py-3 text-left text-sm text-white hover:bg-zinc-800 transition-colors border-b border-zinc-800 last:border-0"
-                    >
-                      <div className="font-medium">{event.name || event.eventName}</div>
-                      <div className="text-xs text-zinc-500">{event.code || event.eventCode}</div>
-                    </button>
-                  ))}
+              {/* Suggestions dropdown */}
+              {showResults && (
+                <div className="absolute z-10 mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl animate-fade-in max-h-72 overflow-y-auto">
+                  {searchResults.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-zinc-500">
+                      {loading ? (ru ? "Загружаю события…" : "Loading events…") : ru ? "Ничего не найдено. Можно ввести код события ниже вручную." : "Nothing found. You can type the event code manually below."}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="px-4 pt-3 text-[11px] uppercase tracking-wider text-zinc-600">
+                        {!searchQuery ? (ru ? "Ближайшие события" : "Upcoming events") : searchResults[0].similar ? (ru ? "Похожие варианты" : "Similar results") : ru ? "Найдено" : "Matches"}
+                      </div>
+                      {searchResults.map(({ event }, idx) => {
+                        const loc = locText(event.location);
+                        const when = [event.start, event.end].filter(Boolean).join(" → ");
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => selectEvent(event)}
+                            className="w-full px-4 py-3 text-left text-sm text-white hover:bg-zinc-800 transition-colors border-b border-zinc-800 last:border-0"
+                          >
+                            <div className="font-medium">{event.name || event.eventName}</div>
+                            <div className="text-xs text-zinc-500">
+                              {[event.code || event.eventCode, loc, when].filter(Boolean).join(" · ")}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               )}
             </div>
