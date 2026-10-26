@@ -399,7 +399,14 @@ export default function App() {
         onSelect={({ year, eventCode, eventName, teams }) => {
           setPrefs({ ...prefs, event: { set: true, year, eventCode, eventName } });
           // Demo data is replaced by the real event; user's own data is kept and extended.
-          const base = db.meta.demo ? { teams: [], records: [] } : { teams: db.teams, records: db.records };
+          const sameEvent = !db.meta.demo && (db.meta.eventCode || "") === (eventCode || "");
+          const withRecords = new Set(db.records.map((r) => String(r.teamId)));
+          const base = db.meta.demo
+            ? { teams: [], records: [] }
+            : sameEvent
+              ? { teams: db.teams, records: db.records }
+              : // other event: keep only teams that already have scouting records, drop the rest
+                { teams: db.teams.filter((t) => withRecords.has(String(t.id))), records: db.records };
           const have = new Set(base.teams.map((t) => String(t.number)));
           const merged = [...base.teams, ...teams.filter((t) => !have.has(String(t.number)))];
           setDb({

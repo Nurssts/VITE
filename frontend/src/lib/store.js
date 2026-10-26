@@ -35,18 +35,48 @@ export function defaultPrefs() {
   };
 }
 
+// Language and chosen event are per-visit: kept in sessionStorage, so a reload keeps them
+// but opening the site again (new tab / reopened app) asks for language and event again.
+const SESSION_KEY = "vite-biobuzz-session-v1";
+
+function readSession() {
+  try {
+    const x = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+    return x && typeof x === "object" ? x : {};
+  } catch {
+    return {};
+  }
+}
+
 export function loadPrefs() {
+  const session = readSession();
   try {
     const x = JSON.parse(localStorage.getItem(PREFS_KEY));
-    if (x && typeof x === "object") return { ...defaultPrefs(), ...x, cookie: { ...defaultPrefs().cookie, ...(x.cookie || {}) }, age: { ...defaultPrefs().age, ...(x.age || {}) } };
+    if (x && typeof x === "object") {
+      const { lang: _lang, event: _event, ...stored } = x; // never restore these from long-term storage
+      return {
+        ...defaultPrefs(),
+        ...stored,
+        cookie: { ...defaultPrefs().cookie, ...(stored.cookie || {}) },
+        age: { ...defaultPrefs().age, ...(stored.age || {}) },
+        lang: session.lang ?? null,
+        event: session.event,
+      };
+    }
   } catch {
     /* ignore */
   }
-  return defaultPrefs();
+  return { ...defaultPrefs(), lang: session.lang ?? null, event: session.event };
 }
 
 export function savePrefs(prefs) {
-  localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  const { lang, event, ...persistent } = prefs;
+  localStorage.setItem(PREFS_KEY, JSON.stringify(persistent));
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ lang, event }));
+  } catch {
+    /* ignore */
+  }
 }
 
 export function loadDb(allowStorage) {
@@ -73,6 +103,11 @@ export function persistDb(db, allowStorage) {
 export function wipeAll() {
   localStorage.removeItem(STORE_KEY);
   localStorage.removeItem(PREFS_KEY);
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
   try {
     indexedDB.deleteDatabase(IDB_NAME);
   } catch {
