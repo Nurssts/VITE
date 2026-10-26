@@ -27,8 +27,8 @@ function LangSelect({ onSelect }) {
       }} />
 
       <div className="relative flex flex-col items-center gap-8 w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex flex-col items-center gap-3">
+        {/* Logo with animation */}
+        <div className="flex flex-col items-center gap-3 animate-fade-in">
           <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white shadow-[0_0_40px_rgba(255,255,255,0.15)]">
             <span className="text-2xl font-black text-black leading-none">V</span>
           </div>
@@ -39,7 +39,7 @@ function LangSelect({ onSelect }) {
         </div>
 
         {/* Language selector cards */}
-        <div className="w-full">
+        <div className="w-full animate-slide-up">
           <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.15em] text-zinc-600">
             Select Language
           </p>
@@ -60,7 +60,7 @@ function LangSelect({ onSelect }) {
                 }`}
                 aria-label={`Select ${label}`}
               >
-                <span className="text-2xl">🇧</span>
+                <span className="text-2xl">🇬🇧</span>
                 <span className="text-base font-semibold">{label}</span>
                 <span className={`text-xs ${hovered === code ? "text-zinc-500" : "text-zinc-600"}`}>{sub}</span>
               </button>
@@ -68,7 +68,7 @@ function LangSelect({ onSelect }) {
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-zinc-700">
+        <p className="text-center text-[11px] text-zinc-700 animate-fade-in">
           FTC BioBuzz · Offline-first · No data collection
         </p>
       </div>
@@ -81,10 +81,53 @@ function EventSelect({ onSelect, lang }) {
   const [year, setYear] = useState("2027");
   const [eventCode, setEventCode] = useState("");
   const [eventName, setEventName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showResults, setShowResults] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSelect({ year, eventCode, eventName });
+  };
+
+  const handleEventSearch = async (query) => {
+    setSearchQuery(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+      const response = await fetch((baseUrl || "") + `/api/ftcscout/events?season=${year}`, {
+        headers: { Accept: "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      const allEvents = data.events || [];
+
+      const filtered = allEvents.filter(event =>
+        (event.name || event.eventName || "").toLowerCase().includes(query.toLowerCase()) ||
+        (event.code || event.eventCode || "").toLowerCase().includes(query.toLowerCase())
+      ).slice(0, 10);
+
+      setSearchResults(filtered);
+      setShowResults(true);
+    } catch (err) {
+      console.error("Search error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectEvent = (event) => {
+    setEventCode(event.code || event.eventCode || "");
+    setEventName(event.name || event.eventName || "");
+    setSearchQuery("");
+    setShowResults(false);
   };
 
   return (
@@ -96,8 +139,8 @@ function EventSelect({ onSelect, lang }) {
       }} />
 
       <div className="relative flex flex-col items-center gap-6 w-full max-w-md">
-        {/* Logo */}
-        <div className="flex flex-col items-center gap-3">
+        {/* Logo with animation */}
+        <div className="flex flex-col items-center gap-3 animate-fade-in">
           <div className="grid h-12 w-12 place-items-center rounded-xl bg-white shadow-[0_0_30px_rgba(255,255,255,0.15)]">
             <span className="text-xl font-black text-black leading-none">V</span>
           </div>
@@ -108,7 +151,7 @@ function EventSelect({ onSelect, lang }) {
         </div>
 
         {/* Event form */}
-        <form onSubmit={handleSubmit} className="w-full">
+        <form onSubmit={handleSubmit} className="w-full animate-slide-up">
           <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.15em] text-zinc-600">
             Select Tournament Event
           </p>
@@ -119,12 +162,53 @@ function EventSelect({ onSelect, lang }) {
               <select
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 transition-all"
               >
                 <option value="2026">2026-2027</option>
                 <option value="2027">2027-2028</option>
                 <option value="2028">2028-2029</option>
               </select>
+            </div>
+
+            {/* Search bar */}
+            <div className="relative">
+              <label className="mb-2 block text-xs font-medium text-zinc-400">Search Events</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleEventSearch(e.target.value)}
+                  placeholder="Search by name or code..."
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 pl-10 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 transition-all"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                {loading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
+                  </div>
+                )}
+              </div>
+
+              {/* Search results dropdown */}
+              {showResults && searchResults.length > 0 && (
+                <div className="absolute z-10 mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl animate-fade-in max-h-60 overflow-y-auto">
+                  {searchResults.map((event, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => selectEvent(event)}
+                      className="w-full px-4 py-3 text-left text-sm text-white hover:bg-zinc-800 transition-colors border-b border-zinc-800 last:border-0"
+                    >
+                      <div className="font-medium">{event.name || event.eventName}</div>
+                      <div className="text-xs text-zinc-500">{event.code || event.eventCode}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -134,7 +218,7 @@ function EventSelect({ onSelect, lang }) {
                 value={eventCode}
                 onChange={(e) => setEventCode(e.target.value)}
                 placeholder="e.g., ALMATY"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 transition-all"
               />
             </div>
 
@@ -145,7 +229,7 @@ function EventSelect({ onSelect, lang }) {
                 value={eventName}
                 onChange={(e) => setEventName(e.target.value)}
                 placeholder="e.g., Almaty Championship"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 transition-all"
               />
             </div>
 
@@ -155,7 +239,7 @@ function EventSelect({ onSelect, lang }) {
           </div>
         </form>
 
-        <p className="text-center text-[11px] text-zinc-700">
+        <p className="text-center text-[11px] text-zinc-700 animate-fade-in">
           You can change this later in Settings
         </p>
       </div>
@@ -170,6 +254,7 @@ export default function App() {
   const [db, setDbState] = useState(() => loadDb(allowStorage));
   const [page, setPage] = useState("overview");
   const [toast, setToast] = useState(null);
+  const [showEventSelect, setShowEventSelect] = useState(false);
 
   const setPrefs = (next) => {
     setPrefsState(next);
@@ -264,7 +349,9 @@ export default function App() {
   if (!prefs.lang) {
     return (
       <LangSelect
-        onSelect={(code) => setPrefs({ ...prefs, lang: code })}
+        onSelect={(code) => {
+          setPrefs({ ...prefs, lang: code });
+        }}
       />
     );
   }
