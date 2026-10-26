@@ -16,13 +16,13 @@ import httpx
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from engine.db import init_db
-from engine.ftcscout import get_all_teams, get_events, get_match_records, get_team_by_number, get_tep_records
+from engine.ftcscout import get_event_teams, get_all_teams, get_events, get_match_records, get_team_by_number, get_tep_records
 from engine.gemini import analyze_match_with_gemini, get_alliance_recommendation
 from engine.monte_carlo import simulate_match
 from engine.scoring import MODEL_VERSION
@@ -303,6 +303,17 @@ async def ftcscout_rankings(season: int = Query(2026), skip: int = Query(0), tak
     """Fetch TEP rankings from FTCScout."""
     records = await get_tep_records(season, skip, take)
     return {"rankings": records, "season": season, "count": len(records)}
+
+
+@app.get("/api/ftcscout/event/{code}/teams")
+async def ftcscout_event_teams(code: str, season: int = Query(2026)) -> Any:
+    """Teams of one event from FTCScout (works without any API key)."""
+    try:
+        return await get_event_teams(season, event_value(code))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"FTCScout: {exc}") from exc
 
 
 # Gemini AI endpoints (requires GOOGLE_API_KEY environment variable)

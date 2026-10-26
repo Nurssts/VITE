@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "./components/Layout";
 import { Button } from "./components/ui";
 import Analysis from "./pages/Analysis";
@@ -10,6 +10,7 @@ import Overview from "./pages/Overview";
 import Scouting from "./pages/Scouting";
 import Settings from "./pages/Settings";
 import Teams from "./pages/Teams";
+import { loadEventTeams, teamsToDb } from "./lib/eventLoader";
 import { loadDb, loadPrefs, persistDb, savePrefs } from "./lib/store";
 import { t } from "./lib/i18n";
 
@@ -88,10 +89,31 @@ function EventSelect({ onSelect, lang }) {
   const [searchResults, setSearchResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
 
-  const handleSubmit = (e) => {
+  const ru = lang === "ru";
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const eventsCache = useRef({});
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSelect({ year, eventCode, eventName });
+    setError("");
+    if (!eventCode.trim()) {
+      onSelect({ year, eventCode: "", eventName, teams: [] });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { teams } = await loadEventTeams(year, eventCode);
+      onSelect({ year, eventCode: eventCode.trim().toUpperCase(), eventName, teams: teamsToDb(teams) });
+    } catch (err) {
+      setError((ru ? "Не удалось загрузить команды события. " : "Could not load the event's teams. ") + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const skipLoading = () =>
+    onSelect({ year, eventCode: eventCode.trim().toUpperCase(), eventName, teams: [] });
 
   const handleEventSearch = async (query) => {
     setSearchQuery(query);
@@ -104,11 +126,14 @@ function EventSelect({ onSelect, lang }) {
     setLoading(true);
     try {
       const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-      const response = await fetch((baseUrl || "") + `/api/ftcscout/events?season=${year}`, {
-        headers: { Accept: "application/json" }
-      });
-      const data = await response.json().catch(() => ({}));
-      const allEvents = data.events || [];
+      if (!eventsCache.current[year]) {
+        const response = await fetch((baseUrl || "") + `/api/ftcscout/events?season=${year}`, {
+          headers: { Accept: "application/json" }
+        });
+        const data = await response.json().catch(() => ({}));
+        eventsCache.current[year] = data.events || [];
+      }
+      const allEvents = eventsCache.current[year];
 
       const filtered = allEvents.filter(event =>
         (event.name || event.eventName || "").toLowerCase().includes(query.toLowerCase()) ||
@@ -234,8 +259,17 @@ function EventSelect({ onSelect, lang }) {
               />
             </div>
 
-            <Button type="submit" className="w-full">
-              Continue
+            {error ? (
+              <div className="rounded-xl border border-red-900 bg-red-950/40 p-3 text-xs text-red-300">
+                {error}
+                <button type="button" onClick={skipLoading} className="mt-2 block underline">
+                  {ru ? "Продолжить с пустой базой (добавлю команды сам)" : "Continue with an empty database (I'll add teams myself)"}
+                </button>
+              </div>
+            ) : null}
+
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? (ru ? "Загружаю команды…" : "Loading teams…") : ru ? "Продолжить" : "Continue"}
             </Button>
           </div>
         </form>
@@ -362,9 +396,19 @@ export default function App() {
     return (
       <EventSelect
         lang={lang}
-        onSelect={({ year, eventCode, eventName }) => {
+        onSelect={({ year, eventCode, eventName, teams }) => {
           setPrefs({ ...prefs, event: { set: true, year, eventCode, eventName } });
-          setDb({ ...db, meta: { ...db.meta, eventCode, eventName } });
+          // Demo data is replaced by the real event; user's own data is kept and extended.
+          const base = db.meta.demo ? { teams: [], records: [] } : { teams: db.teams, records: db.records };
+          const have = new Set(base.teams.map((t) => String(t.number)));
+          const merged = [...base.teams, ...teams.filter((t) => !have.has(String(t.number)))];
+          setDb({
+            ...db,
+            teams: merged,
+            records: base.records,
+            meta: { ...db.meta, demo: false, eventCode, eventName, season: `${year}-${Number(year) + 1}` },
+            draft: { captain: merged[0]?.id || "", picked: [], removed: [] },
+          });
         }}
       />
     );

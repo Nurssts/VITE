@@ -136,3 +136,49 @@ async def get_tep_records(season: int, skip: int = 0, take: int = 100) -> List[d
     except Exception as e:
         print(f"Error fetching TEP records: {e}")
         return []
+
+
+import httpx
+
+_EVENT_TEAMS_FULL = """
+query EventTeams($season: Int!, $code: String!) {
+  eventByCode(season: $season, code: $code) {
+    name
+    teams { teamNumber team { name location { city state } } }
+  }
+}
+"""
+_EVENT_TEAMS_MIN = """
+query EventTeams($season: Int!, $code: String!) {
+  eventByCode(season: $season, code: $code) {
+    name
+    teams { teamNumber team { name } }
+  }
+}
+"""
+
+
+async def get_event_teams(season: int, code: str) -> dict[str, Any]:
+    """Teams registered at one event, via FTCScout (public, no key). Plain httpx, no gql."""
+    last_error = "unknown error"
+    for query in (_EVENT_TEAMS_FULL, _EVENT_TEAMS_MIN):
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(GRAPHQL_URL, json={"query": query, "variables": {"season": season, "code": code}})
+        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        if body.get("errors"):
+            last_error = body["errors"][0].get("message", last_error)
+            continue
+        event = (body.get("data") or {}).get("eventByCode")
+        if not event:
+            return {"name": "", "teams": []}
+        teams = []
+        for row in event.get("teams") or []:
+            team = row.get("team") or {}
+            loc = team.get("location") or {}
+            teams.append({
+                "number": str(row.get("teamNumber")),
+                "name": team.get("name") or "",
+                "region": ", ".join(x for x in (loc.get("city"), loc.get("state")) if x),
+            })
+        return {"name": event.get("name") or "", "teams": teams}
+    raise RuntimeError(last_error)
