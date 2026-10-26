@@ -58,7 +58,7 @@ query GetMatchRecords($season: Int!, $teamNumber: Int!) {
 
 EVENTS_QUERY = gql("""
 query GetEvents($season: Int!) {
-  eventsInDate(season: $season) {
+  eventsOnDate(season: $season) {
     code
     name
     start
@@ -119,7 +119,7 @@ async def get_events(season: int) -> List[dict[str, Any]]:
     """Fetch events for a season."""
     try:
         result = await _client.execute_async(EVENTS_QUERY, variable_values={"season": season})
-        return result.get("eventsInDate", [])
+        return result.get("eventsOnDate", [])
     except Exception as e:
         print(f"Error fetching events: {e}")
         return []
