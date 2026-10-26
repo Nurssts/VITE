@@ -109,13 +109,22 @@ TOA: [документация](https://theorangealliance.org/apidocs).
 
 ## Деплой на бесплатный хостинг
 
-### Backend на Render (бесплатно):
+### Рекомендуемый: Render (Frontend + Backend вместе)
 1. Зарегистрируйтесь на [render.com](https://render.com)
-2. Подключите GitHub репозиторий
+2. Создайте Web Service → подключите GitHub репозиторий
 3. Render автоматически деплоит по `render.yaml`
-4. API будет доступен по URL типа `https://vite-biobuzz-api.onrender.com`
+4. После деплоя сайт будет доступен по URL типа `https://vite-biobuzz.onrender.com`
+5. Все изменения в GitHub автоматически деплоятся на Render
 
-### Frontend на GitHub Pages (бесплатно):
+### Переменные окружения (опционально):
+В настройках Render Service → Environment Variables:
+- `FTC_API_USERNAME` - для FIRST Events API
+- `FTC_API_TOKEN` - для FIRST Events API
+- `TOA_API_KEY` - для The Orange Alliance API
+- `GOOGLE_API_KEY` - для Gemini AI анализа матчей (получить на [AI Studio](https://makersuite.google.com/app/apikey))
+
+### GitHub Pages (альтернатива для frontend только):
+Если нужен только frontend без backend:
 1. В репозитории GitHub: Settings → Pages
 2. Source: GitHub Actions
 3. Автоматический деплой при push в main

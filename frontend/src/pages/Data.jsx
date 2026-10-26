@@ -7,7 +7,9 @@ import { bool, CSV_COLUMNS, csvEsc, download, parseCSV } from "../lib/store";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 async function apiJson(url) {
-  const response = await fetch(API_BASE + url, { headers: { Accept: "application/json" } });
+  // Use relative URL if API_BASE is empty (same-origin deployment on Render)
+  const baseUrl = API_BASE || "";
+  const response = await fetch(baseUrl + url, { headers: { Accept: "application/json" } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(data.detail || `Сервер вернул ${response.status}.`);
   return data;
@@ -338,11 +340,16 @@ export default function Data({ db, setDb, toast }) {
                       const no = String(x.teamNumber ?? x.displayTeamNumber ?? "").trim();
                       if (!no) return;
                       let t = next.teams.find((t) => t.number === no);
+                      // nameShort = real team name; nameFull = school/sponsors list
+                      const teamName = (x.nameShort || x.teamName || x.nameFull || "").trim() || `Команда ${no}`;
+                      if (t && (t.style === "FTC Events API" || /^Команда \d+$/.test(t.name))) {
+                        t.name = teamName; // fix names saved earlier from nameFull
+                      }
                       if (!t) {
                         t = {
                           id: no,
                           number: no,
-                          name: x.nameFull || x.nameShort || x.teamName || `Команда ${no}`,
+                          name: teamName,
                           region: [x.city, x.stateProv].filter(Boolean).join(", "),
                           style: "FTC Events API",
                           notes: "",
