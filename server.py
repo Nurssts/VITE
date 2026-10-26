@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from engine.db import init_db
 from engine.ftcscout import get_all_teams, get_events, get_match_records, get_team_by_number, get_tep_records
+from engine.gemini import analyze_match_with_gemini, get_alliance_recommendation
 from engine.monte_carlo import simulate_match
 from engine.scoring import MODEL_VERSION
 from engine.synergy import pair_model, role_label
@@ -295,6 +296,36 @@ async def ftcscout_rankings(season: int = Query(2027), skip: int = Query(0), tak
     """Fetch TEP rankings from FTCScout."""
     records = await get_tep_records(season, skip, take)
     return {"rankings": records, "season": season, "count": len(records)}
+
+
+# Gemini AI endpoints (requires GOOGLE_API_KEY environment variable)
+@app.post("/api/gemini/analyze-match")
+async def gemini_analyze_match(body: dict[str, Any]) -> Any:
+    """Analyze match using Gemini AI."""
+    try:
+        result = await analyze_match_with_gemini(
+            alliance1_teams=body.get("alliance1_teams", []),
+            alliance2_teams=body.get("alliance2_teams", []),
+            scout_data=body.get("scout_data", ""),
+            season=body.get("season", "2026-2027")
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/gemini/alliance-recommendation")
+async def gemini_recommendation(body: dict[str, Any]) -> Any:
+    """Get alliance partner recommendations using Gemini AI."""
+    try:
+        result = await get_alliance_recommendation(
+            available_teams=body.get("available_teams", []),
+            my_team=body.get("my_team", ""),
+            season=body.get("season", "2026-2027")
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if STATIC_DIR.exists():

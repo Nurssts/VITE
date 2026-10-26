@@ -6,7 +6,9 @@ import { bool, CSV_COLUMNS, csvEsc, download, parseCSV } from "../lib/store";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 async function apiJson(url) {
-  const response = await fetch(API_BASE + url, { headers: { Accept: "application/json" } });
+  // Use relative URL if API_BASE is empty (same-origin deployment on Render)
+  const baseUrl = API_BASE || "";
+  const response = await fetch(baseUrl + url, { headers: { Accept: "application/json" } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(data.detail || `Сервер вернул ${response.status}.`);
   return data;

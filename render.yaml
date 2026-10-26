@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: vite-biobuzz-api
+    name: vite-biobuzz
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt && cd frontend && npm ci && VITE_BASE=/ npm run build
+    buildCommand: pip install -r requirements.txt && cd frontend && npm ci && npm run build
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
@@ -14,6 +14,8 @@ services:
       - key: FTC_API_TOKEN
         sync: false
       - key: TOA_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
         sync: false
       - key: CORS_ORIGINS
         value: https://nurssts.github.io
