@@ -292,14 +292,14 @@ async def ftcscout_team(number: int) -> Any:
 
 
 @app.get("/api/ftcscout/events")
-async def ftcscout_events(season: int = Query(2027)) -> Any:
+async def ftcscout_events(season: int = Query(2026)) -> Any:
     """Fetch events for a season from FTCScout."""
     events = await get_events(season)
     return {"events": events, "season": season, "count": len(events)}
 
 
 @app.get("/api/ftcscout/rankings")
-async def ftcscout_rankings(season: int = Query(2027), skip: int = Query(0), take: int = Query(100)) -> Any:
+async def ftcscout_rankings(season: int = Query(2026), skip: int = Query(0), take: int = Query(100)) -> Any:
     """Fetch TEP rankings from FTCScout."""
     records = await get_tep_records(season, skip, take)
     return {"rankings": records, "season": season, "count": len(records)}

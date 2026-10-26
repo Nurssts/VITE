@@ -46,7 +46,7 @@ function exportRow(db, r) {
 }
 
 export default function Data({ db, setDb, toast }) {
-  const [season, setSeason] = useState((db.meta.season || "2026-2027").replace(/\D/g, "").slice(-4) || "2027");
+  const [season, setSeason] = useState((db.meta.season || "2026-2027").replace(/\D/g, "").slice(-4) || "2026");
   const [code, setCode] = useState(db.meta.demo ? "" : db.meta.eventCode || "");
   const [toaKey, setToaKey] = useState("");
   const [events, setEvents] = useState([]);
@@ -320,27 +320,27 @@ export default function Data({ db, setDb, toast }) {
               variant="secondary"
               onClick={async () => {
                 try {
-                  const data = await apiJson("/api/ftcscout/events?season=2027");
-                  setOut(`Ивентов в сезоне 2027: ${data.count}.`);
+                  const data = await apiJson("/api/ftcscout/events?season=2026");
+                  setOut(`Events in 2026 season: ${data.count}.`);
                 } catch (e) {
                   toast(e.message, true);
                 }
               }}
             >
-              Ивенты 2027
+              Events 2026
             </Button>
             <Button
               variant="secondary"
               onClick={async () => {
                 try {
-                  const data = await apiJson("/api/ftcscout/rankings?season=2027&take=50");
-                  setOut(`Рейтинг TEP: ${data.count} команд в топ-50.`);
+                  const data = await apiJson("/api/ftcscout/rankings?season=2026&take=50");
+                  setOut(`TEP Rankings: ${data.count} teams in top-50.`);
                 } catch (e) {
                   toast(e.message, true);
                 }
               }}
             >
-              Рейтинг TEP
+              TEP Rankings
             </Button>
           </div>
         </Panel>

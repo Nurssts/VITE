@@ -78,7 +78,7 @@ function LangSelect({ onSelect }) {
 
 /* ─── Event Selection Screen ─── */
 function EventSelect({ onSelect, lang }) {
-  const [year, setYear] = useState("2027");
+  const [year, setYear] = useState("2026");
   const [eventCode, setEventCode] = useState("");
   const [eventName, setEventName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -248,7 +248,14 @@ function EventSelect({ onSelect, lang }) {
 }
 
 export default function App() {
-  const [prefs, setPrefsState] = useState(loadPrefs);
+  const [prefs, setPrefsState] = useState(() => {
+    const loaded = loadPrefs();
+    // Force language to English if it was Russian
+    if (loaded.lang === "ru") {
+      loaded.lang = "en";
+    }
+    return loaded;
+  });
   const lang = prefs.lang || "en";  // Default to English
   const allowStorage = prefs.cookie.storage;
   const [db, setDbState] = useState(() => loadDb(allowStorage));
