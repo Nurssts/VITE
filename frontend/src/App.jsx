@@ -154,11 +154,36 @@ function EventSelect({ onSelect, lang }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
-  const selectEvent = (event) => {
+  const selectEvent = async (event) => {
     setEventCode(event.code || event.eventCode || "");
     setEventName(event.name || event.eventName || "");
     setSearchQuery("");
     setShowResults(false);
+
+    // Load real teams from FTCScout API
+    try {
+      const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+      const response = await fetch((baseUrl || "") + `/api/ftcscout/teams`, {
+        headers: { Accept: "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (data.teams && Array.isArray(data.teams)) {
+        // Will be passed to onSelect as 'teams' parameter
+        onSelect({
+          year,
+          eventCode: event.code || event.eventCode || "",
+          eventName: event.name || event.eventName || "",
+          teams: data.teams
+        });
+      } else {
+        onSelect({ year, eventCode: event.code || event.eventCode || "", eventName: event.name || event.eventName || "", teams: [] });
+      }
+    } catch (err) {
+      console.error("Error loading teams:", err);
+      // Fallback: just use event info without teams
+      onSelect({ year, eventCode: event.code || event.eventCode || "", eventName: event.name || event.eventName || "" });
+    }
   };
 
   return (
