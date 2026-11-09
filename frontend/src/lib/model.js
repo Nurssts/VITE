@@ -133,29 +133,55 @@ export function rowsFor(db, id) {
   return db.records.filter((x) => x.teamId === id && (!db.meta.eventCode || x.eventCode === db.meta.eventCode));
 }
 
+const PRIOR_N = 3; // pseudo-observations pulling thin samples toward the event average
+
+export function eventPrior(db) {
+  const rs = db.records.filter((x) => !db.meta.eventCode || x.eventCode === db.meta.eventCode);
+  const bs = rs.map(breakdown);
+  const totals = bs.map((x) => x.total);
+  return {
+    mean: avg(totals),
+    sd: totals.length >= 2 ? sd(totals) : 20,
+    dnf: rs.length ? rs.filter((x) => x.disabled).length / rs.length : 0.04,
+    auto: avg(bs.map((x) => x.auto)),
+    hive: avg(bs.map((x) => x.hive)),
+    flower: avg(bs.map((x) => x.flower)),
+    field: avg(bs.map((x) => x.field)),
+  };
+}
+
 export function stats(db, t) {
   if (!t) return null;
+  const prior = eventPrior(db);
   const rs = rowsFor(db, t.id);
   const bs = rs.map(breakdown);
   const values = bs.map((x) => x.total);
   const count = rs.length;
-  const mean = avg(values);
-  const spread = sd(values);
-  const auto = avg(bs.map((x) => x.auto));
-  const hive = avg(bs.map((x) => x.hive));
-  const flower = avg(bs.map((x) => x.flower));
-  const dnf = count ? rs.filter((x) => x.disabled).length / count : 0;
-  const consistency = clamp(100 - (spread / Math.max(25, mean || 25)) * 100, 15, 98);
+  const shrink = (raw, p) => (raw * count + p * PRIOR_N) / (count + PRIOR_N);
+  const rawMean = avg(values);
+  const rawSd = count >= 2 ? sd(values) : 0;
+  const mean = shrink(rawMean, prior.mean);
+  const spread = count >= 2 ? Math.sqrt(((count - 1) * rawSd ** 2 + 2 * prior.sd ** 2) / (count + 1)) : prior.sd;
+  const se = spread / Math.sqrt(count + PRIOR_N); // uncertainty of the team's true mean
+  const auto = shrink(avg(bs.map((x) => x.auto)), prior.auto);
+  const hive = shrink(avg(bs.map((x) => x.hive)), prior.hive);
+  const flower = shrink(avg(bs.map((x) => x.flower)), prior.flower);
+  const dnf = shrink(count ? rs.filter((x) => x.disabled).length / count : 0, prior.dnf);
+  const consistency = count >= 2 ? clamp(100 - (rawSd / Math.max(25, rawMean || 25)) * 100, 15, 98) : 50;
+  const reliability = count >= 2 ? clamp((100 - Math.min((rawSd / Math.max(1, rawMean)) * 100, 70)) * (1 - dnf), 0, 100) : 50 * (1 - dnf);
+  const confidenceLevel = count >= 8 ? "high" : count >= 4 ? "medium" : count ? "low" : "none";
   return {
     team: t,
     records: rs,
     count,
     mean,
+    rawMean,
     sd: spread,
+    se,
     auto,
     hive,
     flower,
-    field: avg(bs.map((x) => x.field)),
+    field: shrink(avg(bs.map((x) => x.field)), prior.field),
     autoTips: avg(rs.map((x) => num(x.autoHiveTips))),
     teleopTips: avg(rs.map((x) => num(x.teleopHiveTips))),
     flowerOwned: avg(rs.map((x) => num(x.ownedFlowerItems))),
@@ -167,13 +193,14 @@ export function stats(db, t) {
     hiveSuccess: avg(rs.map((x) => num(x.hiveSuccess)).filter(Boolean)),
     flowerAccuracy: avg(rs.map((x) => num(x.flowerAccuracy)).filter(Boolean)),
     trajectories: rs.map((x) => x.autoTrajectory || "unknown"),
-    confidence: count >= 8 ? tr("Высокая") : count >= 4 ? tr("Средняя") : count ? tr("Низкая") : tr("Нет данных"),
+    confidenceLevel,
+    confidence: { high: tr("Высокая"), medium: tr("Средняя"), low: tr("Низкая"), none: tr("Нет данных") }[confidenceLevel],
     consistency,
     profile: {
       auto: clamp((auto / 30) * 100, 0, 100),
       hive: clamp((hive / 60) * 100, 0, 100),
       flower: clamp((flower / 35) * 100, 0, 100),
-      reliability: clamp((100 - Math.min((spread / Math.max(1, mean)) * 100, 70)) * (1 - dnf), 0, 100),
+      reliability,
     },
   };
 }
@@ -189,14 +216,18 @@ export function priority(s) {
   return "В";
 }
 
+export function roleCode(s) {
+  const { hive, flower, auto } = s.profile;
+  if (hive >= flower + 12 && hive >= 45) return "HIVE";
+  if (flower >= hive + 12 && flower >= 40) return "FLOWER";
+  if (auto >= 55 && hive >= 40) return "AUTO_HIVE";
+  return "BALANCED";
+}
+
 export function roleLabel(s) {
-  const hive = s.profile.hive;
-  const flower = s.profile.flower;
-  const auto = s.profile.auto;
-  if (hive >= flower + 12 && hive >= 45) return tr("Hive-специалист");
-  if (flower >= hive + 12 && flower >= 40) return tr("Flower / Endgame-специалист");
-  if (auto >= 55 && hive >= 40) return "Auto-Hive";
-  return tr("Сбалансированный");
+  const c = roleCode(s);
+  if (c === "AUTO_HIVE") return "Auto-Hive";
+  return tr({ HIVE: "Hive-специалист", FLOWER: "Flower / Endgame-специалист", BALANCED: "Сбалансированный" }[c]);
 }
 
 function modeTraj(values) {
@@ -224,7 +255,6 @@ export function collisionCheck(a, b) {
     reasons.push(tr("Оба робота активно TIP-ят HIVE в Auto — конкуренция за одну конструкцию."));
   }
   if (bothAuto && !sameLane && ta !== "unknown" && tb !== "unknown") {
-    risk += 8;
     reasons.push(tr("Оба сильные в Auto, но разные зоны — столкновение менее вероятно."));
   }
   risk = clamp(risk, 0, 100);
@@ -247,6 +277,7 @@ export function pairModel(db, x, y) {
   const score = clamp(cover * 0.42 + hiveFlower * 0.22 + complement * 0.08 + stability * 0.16 + dataFactor * 14 - dnfPenalty - collision.score * 0.12, 0, 100);
   const synergyPts = Math.round((score - 50) * 0.12 * 10) / 10;
   const roles = [roleLabel(a), roleLabel(b)];
+  const roleCodes = [roleCode(a), roleCode(b)];
   return {
     a,
     b,
@@ -256,39 +287,87 @@ export function pairModel(db, x, y) {
     stability,
     mean: Math.max(0, a.mean + b.mean + synergyPts),
     sd: Math.sqrt(a.sd * a.sd + b.sd * b.sd + 25),
+    se: Math.sqrt(a.se * a.se + b.se * b.se),
     collision,
     roles,
-    complementaryRoles: (roles[0].includes("Hive") && roles[1].includes("Flower")) || (roles[1].includes("Hive") && roles[0].includes("Flower")),
+    roleCodes,
+    complementaryRoles: roleCodes.includes("HIVE") && roleCodes.includes("FLOWER"),
     dnfIndex: (a.dnf + b.dnf) / 2,
   };
 }
 
-function gauss() {
-  let u = 0;
-  let v = 0;
-  while (!u) u = Math.random();
-  while (!v) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let x = Math.imul(a ^ (a >>> 15), 1 | a);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-export function simulate(db, ids, iterations = 1000) {
+function makeGauss(rnd) {
+  return () => {
+    let u = 0;
+    let v = 0;
+    while (!u) u = rnd();
+    while (!v) v = rnd();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+}
+
+// Standard normal CDF (Abramowitz-Stegun 26.2.17).
+function phi(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp((-z * z) / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}
+
+function percentile(sorted, q) {
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1))))];
+}
+
+const HIT_DIV = 220; // collision probability = score / HIT_DIV
+const HIT_LOSS = [18, 12]; // penalty = 18 + U(0, 12) points
+
+/**
+ * Monte-Carlo series. opts.seed makes a run reproducible.
+ * Each iteration first draws every alliance's TRUE mean from its uncertainty (se),
+ * then draws the match score around it. ciLow/ciHigh is therefore a credible interval for
+ * P(Alliance 1 wins) that widens when scouting data is thin; mcMarginPct is only the sampling error.
+ */
+export function simulate(db, ids, iterations = 1000, opts = {}) {
   const [a, b, c, d] = ids;
   const left = pairModel(db, a, b);
   const right = pairModel(db, c, d);
   if (!left || !right) return null;
+  const seed = opts.seed ?? Math.floor(Math.random() * 4294967296);
+  const rnd = mulberry32(seed);
+  const gauss = makeGauss(rnd);
+  const pHitL = left.collision.score / HIT_DIV;
+  const pHitR = right.collision.score / HIT_DIV;
+  const expLoss = HIT_LOSS[0] + HIT_LOSS[1] / 2;
+  const sdPair = Math.sqrt(left.sd ** 2 + right.sd ** 2);
   let wins = 0;
   let loss = 0;
   let ties = 0;
-  const diff = [];
   let flowerLoss = 0;
   let hiveLoss = 0;
+  const diff = [];
+  const pCond = [];
   for (let i = 0; i < iterations; i++) {
-    const hit = Math.random() < left.collision.score / 220;
-    let x = left.mean + gauss() * left.sd;
-    const y = right.mean + gauss() * right.sd;
-    if (hit) x -= 18 + Math.random() * 12;
+    const muL = left.mean + gauss() * left.se;
+    const muR = right.mean + gauss() * right.se;
+    let x = muL + gauss() * left.sd;
+    let y = muR + gauss() * right.sd;
+    if (rnd() < pHitL) x -= HIT_LOSS[0] + rnd() * HIT_LOSS[1];
+    if (rnd() < pHitR) y -= HIT_LOSS[0] + rnd() * HIT_LOSS[1];
+    x = Math.max(0, Math.round(x));
+    y = Math.max(0, Math.round(y));
     diff.push(x - y);
-    if (Math.abs(x - y) < 1) ties += 1;
+    pCond.push(phi((muL - pHitL * expLoss - (muR - pHitR * expLoss)) / sdPair));
+    if (x === y) ties += 1;
     else if (x > y) wins += 1;
     else {
       loss += 1;
@@ -297,10 +376,15 @@ export function simulate(db, ids, iterations = 1000) {
     }
   }
   const p = (wins + ties * 0.5) / iterations;
-  const margin = 1.96 * Math.sqrt((p * (1 - p)) / iterations) * 100;
+  const mcMargin = 1.96 * Math.sqrt((p * (1 - p)) / iterations) * 100;
+  const sortedP = [...pCond].sort((m, n) => m - n);
+  const ciLow = Math.round(percentile(sortedP, 0.025) * 100);
+  const ciHigh = Math.round(percentile(sortedP, 0.975) * 100);
   const risks = [];
   if (left.a.count + left.b.count + right.a.count + right.b.count < 8) {
     risks.push(tr("Мало наблюдений: интервал неопределённости широкий. Решение драфта стоит сверять с живым скаутингом."));
+  } else if (ciHigh - ciLow >= 40) {
+    risks.push(tr("Интервал победы очень широкий: данных пока недостаточно для уверенного прогноза."));
   }
   if (loss && flowerLoss / loss >= 0.55) {
     risks.push(tr("В {n}% смоделированных поражений у Альянса 1 слабее вклад в FLOWER (последняя минута).").replace("{n}", Math.round((flowerLoss / loss) * 100)));
@@ -315,13 +399,15 @@ export function simulate(db, ids, iterations = 1000) {
   }
   return {
     iterations,
+    seed,
     winPct: Math.round((wins / iterations) * 1000) / 10,
     lossPct: Math.round((loss / iterations) * 1000) / 10,
     tiePct: Math.round((ties / iterations) * 1000) / 10,
     mean1: left.mean,
     mean2: right.mean,
-    ciLow: Math.round(clamp(p * 100 - margin, 0, 100)),
-    ciHigh: Math.round(clamp(p * 100 + margin, 0, 100)),
+    ciLow,
+    ciHigh,
+    mcMarginPct: Math.round(mcMargin * 10) / 10,
     diff,
     risks,
     left,
@@ -332,7 +418,12 @@ export function simulate(db, ids, iterations = 1000) {
 export function denialPick(db, captainId, pool) {
   const remaining = pool.filter((t) => t.id !== captainId);
   if (remaining.length < 2) return null;
-  const opponentCaps = remaining.slice(0, Math.min(6, remaining.length));
+  // Likely opposing captains: the strongest remaining teams (pass `pool` ordered by seed to refine).
+  const opponentCaps = [...remaining]
+    .map((team) => ({ team, mean: stats(db, team).mean }))
+    .sort((x, y) => y.mean - x.mean)
+    .slice(0, Math.min(6, remaining.length))
+    .map((x) => x.team);
   let best = null;
   remaining.forEach((candidate) => {
     let threat = 0;
