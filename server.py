@@ -4,11 +4,8 @@ Credentials stay in process environment. They are never returned to the browser.
 """
 from __future__ import annotations
 
-import json
 import os
 import re
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,15 +16,9 @@ from slowapi.errors import RateLimitExceeded
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
-from engine.db import init_db
 from engine.ftcscout import get_event_teams, list_events, get_all_teams, get_events, get_match_records, get_team_by_number, get_tep_records
 from engine.gemini import analyze_match_with_gemini, get_alliance_recommendation
-from engine.monte_carlo import simulate_match
-from engine.scoring import MODEL_VERSION
-from engine.synergy import pair_model, role_label
-from engine.stats import team_stats
 
 ROOT = Path(__file__).resolve().parent
 FRONTEND_DIST = ROOT / "frontend" / "dist"
@@ -48,29 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-class TeamIn(BaseModel):
-    id: str
-    number: str
-    name: str
-    region: str = ""
-    style: str = ""
-    notes: str = ""
-
-
-class PairIn(BaseModel):
-    team_a: TeamIn
-    team_b: TeamIn
-    records: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class SimIn(BaseModel):
-    red: list[TeamIn]
-    blue: list[TeamIn]
-    records: list[dict[str, Any]] = Field(default_factory=list)
-    iterations: int = 1000
-    seed: int | None = None
 
 
 def season_value(value: str) -> str:
@@ -137,24 +105,19 @@ async def toa_get(path: str) -> Any:
         raise HTTPException(status_code=502, detail="Could not reach The Orange Alliance.") from exc
 
 
-@app.on_event("startup")
-def startup() -> None:
-    init_db()  # local SQLite cache for saved simulations; scout data stays in the browser unless exported.
-
-
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     return {
         "ok": True,
         "name": "VITE",
         "subtitle": "BioBuzz Alliance Matrix",
-        "model": MODEL_VERSION,
+        "model": "BIOBUZZ TU05 · 15.10.2026",
         "official_api_configured": bool(os.getenv("FTC_API_USERNAME", "").strip() and os.getenv("FTC_API_TOKEN", "").strip()),
         "toa_configured": bool(os.getenv("TOA_API_KEY", "").strip()),
         "sources": {
             "first": "FIRST FTC Events API",
             "toa": "The Orange Alliance API",
-            "local": "Scout entries on this device / optional SQLite cache",
+            "local": "Scout entries on this device",
         },
     }
 
@@ -229,49 +192,6 @@ async def toa_matches(event_key: str) -> Any:
 @app.get("/api/toa/event/{event_key}/teams")
 async def toa_teams(event_key: str) -> Any:
     return await toa_get(f"event/{toa_event(event_key)}/teams")
-
-
-@app.post("/api/math/synergy")
-async def synergy(body: PairIn) -> Any:
-    model = pair_model(body.team_a.model_dump(), body.team_b.model_dump(), body.records)
-    if not model:
-        raise HTTPException(status_code=400, detail="Could not compute pair synergy.")
-    safe = {k: v for k, v in model.items() if k not in {"a", "b"}}
-    safe["roles"] = [role_label(team_stats(body.team_a.model_dump(), body.records)), role_label(team_stats(body.team_b.model_dump(), body.records))]
-    return safe
-
-
-@app.post("/api/math/simulate")
-async def simulate(body: SimIn) -> Any:
-    if len(body.red) != 2 or len(body.blue) != 2:
-        raise HTTPException(status_code=400, detail="Provide exactly two teams per alliance.")
-    result = simulate_match(
-        (body.red[0].model_dump(), body.red[1].model_dump()),
-        (body.blue[0].model_dump(), body.blue[1].model_dump()),
-        body.records,
-        iterations=body.iterations,
-        seed=body.seed,
-    )
-    conn = init_db()
-    conn.execute(
-        "INSERT INTO alliance_simulations(id, created_at, payload) VALUES (?,?,?)",
-        (str(uuid.uuid4()), datetime.now(timezone.utc).isoformat(), json.dumps({"winPct": result["winPct"], "iterations": result["iterations"]})),
-    )
-    conn.commit()
-    conn.close()
-    return result
-
-
-@app.post("/api/math/notebook")
-async def notebook(body: dict[str, Any]) -> Any:
-    """Return a structured judge-export payload. The browser renders and prints it; no fabricated metrics."""
-    return {
-        "title": "VITE Engineering Notebook excerpt",
-        "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "model": MODEL_VERSION,
-        "payload": body,
-        "disclaimer": "Figures below are computed from the scout database you supplied. Demo rows are labelled as such.",
-    }
 
 
 # FTCScout.org API endpoints (public, no auth required)
