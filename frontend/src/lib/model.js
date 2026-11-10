@@ -1,4 +1,6 @@
 import { tr } from "./i18n";
+import gameConfig from "../config/game.biobuzz";
+
 export const MODEL_VERSION = "BIOBUZZ TU05 · 15.10.2026";
 export const STORE_KEY = "vite-biobuzz-matrix-v2";
 export const PREFS_KEY = "vite-biobuzz-prefs-v1";
@@ -121,11 +123,12 @@ export function fmt(v, d = 1) {
 }
 
 export function breakdown(r) {
-  const auto = (r.autoLeave ? 3 : 0) + (r.autoPark ? 5 : 0) + num(r.autoHiveTips) * 20;
-  const hive = num(r.teleopHiveTips) * 20 + num(r.cellItems) * 2;
-  const flower = num(r.ownedFlowerItems) * 2 + num(r.bottomNectar) * 5;
-  const field = num(r.gardenItems) + (r.teleopPark ? 5 : 0);
-  const foul = num(r.penalties) * 5;
+  const { points } = gameConfig;
+  const auto = (r.autoLeave ? points.autoLeave : 0) + (r.autoPark ? points.autoPark : 0) + num(r.autoHiveTips) * points.autoHiveTip;
+  const hive = num(r.teleopHiveTips) * points.teleopHiveTip + num(r.cellItems) * points.cellItem;
+  const flower = num(r.ownedFlowerItems) * points.ownedFlowerItem + num(r.bottomNectar) * points.bottomNectar;
+  const field = num(r.gardenItems) + (r.teleopPark ? points.teleopPark : 0);
+  const foul = num(r.penalties) * points.penalty;
   return { auto, hive, flower, field, foul, total: Math.max(0, auto + hive + flower + field - foul) };
 }
 
@@ -197,9 +200,9 @@ export function stats(db, t) {
     confidence: { high: tr("Высокая"), medium: tr("Средняя"), low: tr("Низкая"), none: tr("Нет данных") }[confidenceLevel],
     consistency,
     profile: {
-      auto: clamp((auto / 30) * 100, 0, 100),
-      hive: clamp((hive / 60) * 100, 0, 100),
-      flower: clamp((flower / 35) * 100, 0, 100),
+      auto: clamp((auto / gameConfig.thresholds.autoThreshold) * 100, 0, 100),
+      hive: clamp((hive / gameConfig.thresholds.hiveThreshold) * 100, 0, 100),
+      flower: clamp((flower / gameConfig.thresholds.flowerThreshold) * 100, 0, 100),
       reliability,
     },
   };
@@ -218,9 +221,10 @@ export function priority(s) {
 
 export function roleCode(s) {
   const { hive, flower, auto } = s.profile;
-  if (hive >= flower + 12 && hive >= 45) return "HIVE";
-  if (flower >= hive + 12 && flower >= 40) return "FLOWER";
-  if (auto >= 55 && hive >= 40) return "AUTO_HIVE";
+  const { thresholds } = gameConfig;
+  if (hive >= flower + 12 && hive >= thresholds.hiveThreshold - 15) return "HIVE";
+  if (flower >= hive + 12 && flower >= thresholds.flowerThreshold + 5) return "FLOWER";
+  if (auto >= 55 && hive >= thresholds.hiveThreshold - 20) return "AUTO_HIVE";
   return "BALANCED";
 }
 
@@ -273,8 +277,19 @@ export function pairModel(db, x, y) {
   const dataFactor = Math.min(1, (a.count + b.count) / 12);
   const stability = avg([a.consistency, b.consistency]);
   const collision = collisionCheck(a, b);
-  const dnfPenalty = (a.dnf + b.dnf) * 18;
-  const score = clamp(cover * 0.42 + hiveFlower * 0.22 + complement * 0.08 + stability * 0.16 + dataFactor * 14 - dnfPenalty - collision.score * 0.12, 0, 100);
+  const { synergy, collision: colConfig } = gameConfig;
+  const dnfPenalty = (a.dnf + b.dnf) * synergy.dnfPenaltyWeight;
+  const score = clamp(
+    cover * synergy.coverWeight +
+    hiveFlower * synergy.hiveFlowerWeight +
+    complement * synergy.complementWeight +
+    stability * synergy.stabilityWeight +
+    dataFactor * synergy.dataFactorWeight -
+    dnfPenalty -
+    collision.score * synergy.collisionPenaltyWeight,
+    0,
+    100
+  );
   const synergyPts = Math.round((score - 50) * 0.12 * 10) / 10;
   const roles = [roleLabel(a), roleLabel(b)];
   const roleCodes = [roleCode(a), roleCode(b)];
@@ -328,26 +343,24 @@ function percentile(sorted, q) {
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1))))];
 }
 
-const HIT_DIV = 220; // collision probability = score / HIT_DIV
-const HIT_LOSS = [18, 12]; // penalty = 18 + U(0, 12) points
-
 /**
  * Monte-Carlo series. opts.seed makes a run reproducible.
  * Each iteration first draws every alliance's TRUE mean from its uncertainty (se),
  * then draws the match score around it. ciLow/ciHigh is therefore a credible interval for
  * P(Alliance 1 wins) that widens when scouting data is thin; mcMarginPct is only the sampling error.
  */
-export function simulate(db, ids, iterations = 1000, opts = {}) {
+export function simulate(db, ids, iterations = gameConfig.monteCarlo.defaultIterations, opts = {}) {
   const [a, b, c, d] = ids;
   const left = pairModel(db, a, b);
   const right = pairModel(db, c, d);
   if (!left || !right) return null;
-  const seed = opts.seed ?? Math.floor(Math.random() * 4294967296);
+  const seed = opts.seed ?? Math.floor(Math.random() * gameConfig.monteCarlo.seedPrecision);
   const rnd = mulberry32(seed);
   const gauss = makeGauss(rnd);
-  const pHitL = left.collision.score / HIT_DIV;
-  const pHitR = right.collision.score / HIT_DIV;
-  const expLoss = HIT_LOSS[0] + HIT_LOSS[1] / 2;
+  const { collision: colConfig } = gameConfig;
+  const pHitL = left.collision.score / colConfig.hitDiv;
+  const pHitR = right.collision.score / colConfig.hitDiv;
+  const expLoss = colConfig.hitLossBase + colConfig.hitLossVar / 2;
   const sdPair = Math.sqrt(left.sd ** 2 + right.sd ** 2);
   let wins = 0;
   let loss = 0;
@@ -361,8 +374,8 @@ export function simulate(db, ids, iterations = 1000, opts = {}) {
     const muR = right.mean + gauss() * right.se;
     let x = muL + gauss() * left.sd;
     let y = muR + gauss() * right.sd;
-    if (rnd() < pHitL) x -= HIT_LOSS[0] + rnd() * HIT_LOSS[1];
-    if (rnd() < pHitR) y -= HIT_LOSS[0] + rnd() * HIT_LOSS[1];
+    if (rnd() < pHitL) x -= colConfig.hitLossBase + rnd() * colConfig.hitLossVar;
+    if (rnd() < pHitR) y -= colConfig.hitLossBase + rnd() * colConfig.hitLossVar;
     x = Math.max(0, Math.round(x));
     y = Math.max(0, Math.round(y));
     diff.push(x - y);
