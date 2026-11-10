@@ -15,7 +15,6 @@ import { loadEventTeams, teamsToDb } from "./lib/eventLoader";
 import { locText, searchEvents } from "./lib/eventSearch";
 import { loadDb, loadPrefs, persistDb, savePrefs } from "./lib/store";
 import { t } from "./lib/i18n";
-import { registerSW } from "virtual:pwa-register";
 
 const PAGES = ["overview", "scouting", "teams", "analysis", "draft", "notebook", "data", "legal", "settings"];
 
@@ -346,35 +345,6 @@ export default function App() {
   const [page, setPage] = useState("overview");
   const [toast, setToast] = useState(null);
   const [showEventSelect, setShowEventSelect] = useState(false);
-  const [swStatus, setSwStatus] = useState("active"); // active, offline, update-available, server-down
-
-  // Register service worker
-  useEffect(() => {
-    const updateSW = registerSW({
-      onNeedRefresh() {
-        setSwStatus("update-available");
-      },
-      onOfflineReady() {
-        setSwStatus("offline");
-      },
-      onRegistered(registration) {
-        // Check if server is down
-        setInterval(async () => {
-          try {
-            const response = await fetch("/api/health", { method: "HEAD", cache: "no-store" });
-            if (response.ok) {
-              setSwStatus(s => s === "server-down" ? "active" : s);
-            } else {
-              setSwStatus("server-down");
-            }
-          } catch {
-            setSwStatus("server-down");
-          }
-        }, 30000); // Check every 30 seconds
-      },
-    });
-    return () => updateSW();
-  }, []);
 
   const setPrefs = (next) => {
     setPrefsState(next);
@@ -514,10 +484,6 @@ export default function App() {
         eventLabel={db.meta.eventName || t(lang, "event_not_set")}
         onScout={() => setPage("scouting")}
         lang={lang}
-        swStatus={swStatus}
-        onSwUpdate={() => {
-          window.location.reload();
-        }}
       >
         {content}
       </Layout>
