@@ -60,6 +60,7 @@ export default function Legal() {
           <ul className="list-disc space-y-2 pl-5">
             <li>{tr("FIRST FTC Events API — официальные ивенты, команды, результаты. Ключи только на сервере. Условия: ftc-events.firstinspires.org.")}</li>
             <li>{tr("The Orange Alliance API — опциональный импорт матчей. Ключ TOA_API_KEY только на сервере.")}</li>
+            <li>{tr("Google Gemini AI — опциональный AI-анализ матчей и рекомендаций партнёров (только при явном включении). Скаутские заметки и данные команд отправляются в Google при использовании AI-функций. Не вводите личные данные, особенно данные несовершеннолетних.")}</li>
             <li>{tr("Inter (SIL Open Font License) — шрифт интерфейса.")}</li>
             <li>{tr("Lucide Icons (ISC) — векторные иконки.")}</li>
             <li>{tr("Не используются: Google Analytics, рекламные SDK, платёжные SDK, session replay.")}</li>

@@ -2,15 +2,19 @@ import { tr } from "../lib/i18n";
 import {
   BarChart3,
   ClipboardList,
+  Download,
   FileText,
   Gavel,
   LayoutDashboard,
   Menu,
+  RefreshCw,
   Scale,
   Settings,
   Shield,
   Upload,
   Users,
+  Wifi,
+  WifiOff,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -35,7 +39,7 @@ function buildNav(lang) {
   }));
 }
 
-function Sidebar({ nav, page, setPage, eventLabel, lang, onClose }) {
+function Sidebar({ nav, page, setPage, eventLabel, lang, onClose, swStatus, onSwUpdate }) {
   return (
     <div className="flex h-full flex-col">
       {/* Logo + close (mobile) */}
@@ -76,6 +80,49 @@ function Sidebar({ nav, page, setPage, eventLabel, lang, onClose }) {
           <div className="text-[10px] text-zinc-600 truncate">{eventLabel}</div>
         </div>
       </div>
+
+      {/* Service worker status */}
+      {swStatus && swStatus !== "active" && (
+        <div className="mb-5 flex items-center gap-2 rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2.5">
+          {swStatus === "offline" ? (
+            <WifiOff size={16} className="text-zinc-500 flex-shrink-0" />
+          ) : swStatus === "server-down" ? (
+            <WifiOff size={16} className="text-amber-500 flex-shrink-0" />
+          ) : swStatus === "update-available" ? (
+            <RefreshCw size={16} className="text-green-500 flex-shrink-0" />
+          ) : null}
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-zinc-200">
+              {swStatus === "offline"
+                ? "Offline mode"
+                : swStatus === "server-down"
+                ? "Server offline"
+                : swStatus === "update-available"
+                ? "Update available"
+                : ""}
+            </div>
+            <div className="text-[10px] text-zinc-600">
+              {swStatus === "offline"
+                ? "Using cached data"
+                : swStatus === "server-down"
+                ? "API unavailable, scouting works offline"
+                : swStatus === "update-available"
+                ? "New version ready"
+                : ""}
+            </div>
+          </div>
+          {swStatus === "update-available" && onSwUpdate && (
+            <button
+              type="button"
+              onClick={onSwUpdate}
+              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-zinc-500"
+              aria-label="Update app"
+            >
+              <Download size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex flex-1 flex-col gap-0.5" aria-label={t(lang, "nav_overview")}>
@@ -131,7 +178,7 @@ function Sidebar({ nav, page, setPage, eventLabel, lang, onClose }) {
   );
 }
 
-export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru", children }) {
+export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru", swStatus, onSwUpdate, children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const nav = buildNav(lang);
   const title = nav.find((n) => n.id === page)?.label || nav[0].label;
@@ -145,7 +192,7 @@ export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru"
       <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
         {/* ── Desktop sidebar ── */}
         <aside className="hidden lg:flex h-screen sticky top-0 flex-col border-r border-zinc-900 bg-zinc-950 px-4 py-5">
-          <Sidebar nav={nav} page={page} setPage={setPage} eventLabel={eventLabel} lang={lang} />
+          <Sidebar nav={nav} page={page} setPage={setPage} eventLabel={eventLabel} lang={lang} swStatus={swStatus} onSwUpdate={onSwUpdate} />
         </aside>
 
         {/* ── Mobile drawer overlay ── */}
@@ -163,7 +210,7 @@ export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru"
             menuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <Sidebar nav={nav} page={page} setPage={setPage} eventLabel={eventLabel} lang={lang} onClose={() => setMenuOpen(false)} />
+          <Sidebar nav={nav} page={page} setPage={setPage} eventLabel={eventLabel} lang={lang} onClose={() => setMenuOpen(false)} swStatus={swStatus} onSwUpdate={onSwUpdate} />
         </div>
 
         {/* ── Main content area ── */}

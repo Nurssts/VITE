@@ -27,6 +27,12 @@ STATIC_DIR = FRONTEND_DIST if (FRONTEND_DIST / "index.html").exists() else WEB
 FIRST_API = "https://ftc-api.firstinspires.org/v2.0"
 TOA_API = "https://theorangealliance.org/api"
 
+# Season year constants
+# FIRST API v2.0 uses the year the season ENDS (e.g., 2027 for 2026-27 season)
+# Source: https://ftc-events.firstinspires.org/services/api - examples show 2025 in URL for 2024-25 season
+SEASON_FIRST = "2027"  # Year season ends (for FIRST API)
+SEASON_FTCSCOUT = 2026  # Year season starts (for FTCScout)
+
 app = FastAPI(title="VITE · BioBuzz Alliance Matrix", version="2.0.0")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -124,32 +130,43 @@ async def health() -> dict[str, Any]:
 
 @app.get("/api/sdk")
 async def sdk_inventory() -> dict[str, Any]:
+    ai_enabled = os.getenv("AI_ENABLED", "false").strip().lower() == "true"
+    third_party = [
+        {
+            "name": "FIRST FTC Events API",
+            "purpose": "Official event, team, and match results when credentials are configured.",
+            "data": "Public tournament metadata. No scout notes leave this computer unless you export them.",
+            "url": "https://ftc-events.firstinspires.org/services/API",
+            "required": False,
+        },
+        {
+            "name": "The Orange Alliance API",
+            "purpose": "Optional qualification match import.",
+            "data": "Public TOA event payloads. Requires TOA_API_KEY on the server only.",
+            "url": "https://theorangealliance.org/apidocs",
+            "required": False,
+        },
+        {
+            "name": "FTCScout.org GraphQL API",
+            "purpose": "Public team database, rankings, and match records.",
+            "data": "Public FTC team data and rankings. No authentication required.",
+            "url": "https://ftcscout.org",
+            "required": False,
+        },
+    ]
+    if ai_enabled:
+        third_party.append({
+            "name": "Google Gemini AI",
+            "purpose": "Optional AI-powered match analysis and alliance recommendations (only when explicitly enabled).",
+            "data": "Scout notes and team data are sent to Google when you use AI features. Do not enter personal data, especially data of minors.",
+            "url": "https://ai.google.dev",
+            "required": False,
+        })
     return {
-        "thirdParty": [
-            {
-                "name": "FIRST FTC Events API",
-                "purpose": "Official event, team, and match results when credentials are configured.",
-                "data": "Public tournament metadata. No scout notes leave this computer unless you export them.",
-                "url": "https://ftc-events.firstinspires.org/services/API",
-                "required": False,
-            },
-            {
-                "name": "The Orange Alliance API",
-                "purpose": "Optional qualification match import.",
-                "data": "Public TOA event payloads. Requires TOA_API_KEY on the server only.",
-                "url": "https://theorangealliance.org/apidocs",
-                "required": False,
-            },
-            {
-                "name": "FTCScout.org GraphQL API",
-                "purpose": "Public team database, rankings, and match records.",
-                "data": "Public FTC team data and rankings. No authentication required.",
-                "url": "https://ftcscout.org",
-                "required": False,
-            },
-        ],
+        "thirdParty": third_party,
         "notUsed": ["Google Analytics", "advertising SDKs", "session replay", "payment processors"],
         "note": "VITE does not load third-party tracking scripts in the browser. Optional APIs run only from the local Python proxy.",
+        "aiEnabled": ai_enabled,
     }
 
 
@@ -237,12 +254,14 @@ async def ftcscout_event_teams(code: str, season: int = Query(2026)) -> Any:
         raise HTTPException(status_code=502, detail=f"FTCScout: {exc}") from exc
 
 
-# Gemini AI endpoints (requires GOOGLE_API_KEY environment variable)
+# Gemini AI endpoints (requires GOOGLE_API_KEY and AI_ENABLED environment variables)
 # Rate limited: 10 requests per minute per IP
 @app.post("/api/gemini/analyze-match")
 @limiter.limit("10/minute")
 async def gemini_analyze_match(request: Request, body: dict[str, Any]) -> Any:
     """Analyze match using Gemini AI."""
+    if os.getenv("AI_ENABLED", "false").strip().lower() != "true":
+        raise HTTPException(status_code=503, detail="AI features are disabled on this server.")
     try:
         result = await analyze_match_with_gemini(
             alliance1_teams=body.get("alliance1_teams", []),
@@ -259,6 +278,8 @@ async def gemini_analyze_match(request: Request, body: dict[str, Any]) -> Any:
 @limiter.limit("10/minute")
 async def gemini_recommendation(request: Request, body: dict[str, Any]) -> Any:
     """Get alliance partner recommendations using Gemini AI."""
+    if os.getenv("AI_ENABLED", "false").strip().lower() != "true":
+        raise HTTPException(status_code=503, detail="AI features are disabled on this server.")
     try:
         result = await get_alliance_recommendation(
             available_teams=body.get("available_teams", []),

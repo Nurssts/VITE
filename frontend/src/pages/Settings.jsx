@@ -36,6 +36,32 @@ export default function Settings({ prefs, setPrefs, toast, setDb, lang = "ru" })
         </Button>
       </Panel>
 
+      {/* AI Settings */}
+      <Panel className="mb-4 space-y-3">
+        <h2 className="text-sm font-semibold text-zinc-100">{tr("AI-функции (Gemini)")}</h2>
+        <p className="text-sm text-zinc-400">{tr("Опциональный AI-анализ матчей и рекомендаций партнёров.")}</p>
+        <label className="flex gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            className="accent-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+            checked={prefs.ai?.enabled || false}
+            onChange={(e) => {
+              if (e.target.checked) {
+                if (!confirm(tr("AI-функции отправляют скаутские заметки и данные команд в Google. Не вводите личные данные, особенно данные несовершеннолетних. Продолжить?"))) {
+                  return;
+                }
+              }
+              setPrefs({ ...prefs, ai: { enabled: e.target.checked } });
+              toast(e.target.checked ? tr("AI-функции включены.") : tr("AI-функции выключены."));
+            }}
+          />
+          {tr("Включить AI-анализ (отправляет данные в Google)")}
+        </label>
+        {prefs.ai?.enabled && (
+          <p className="text-xs text-zinc-500">{tr("Предупреждение: скаутские заметки и данные команд отправляются в Google при использовании AI-функций. Не вводите личные данные.")}</p>
+        )}
+      </Panel>
+
       <Panel className="space-y-3">
         <h2 className="text-sm font-semibold">{tr("Возраст участника")}</h2>
         <p className="text-sm text-zinc-400">{tr("FTC — молодёжная программа. Локальный профиль не требует email. Подтвердите возраст или согласие наставника.")}</p>
