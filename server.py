@@ -22,8 +22,7 @@ from engine.gemini import analyze_match_with_gemini, get_alliance_recommendation
 
 ROOT = Path(__file__).resolve().parent
 FRONTEND_DIST = ROOT / "frontend" / "dist"
-WEB = ROOT / "web"
-STATIC_DIR = FRONTEND_DIST if (FRONTEND_DIST / "index.html").exists() else WEB
+STATIC_DIR = FRONTEND_DIST if (FRONTEND_DIST / "index.html").exists() else None
 FIRST_API = "https://ftc-api.firstinspires.org/v2.0"
 TOA_API = "https://theorangealliance.org/api"
 
