@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20
+      - key: PYTHON_VERSION
+        value: 3.12.7
       - key: FTC_API_USERNAME
         sync: false
       - key: FTC_API_TOKEN

@@ -290,5 +290,5 @@ async def gemini_recommendation(request: Request, body: dict[str, Any]) -> Any:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-if STATIC_DIR.exists():
+if STATIC_DIR is not None:
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="web")
