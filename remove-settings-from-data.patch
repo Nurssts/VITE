@@ -1,0 +1,22 @@
+diff --git a/frontend/src/components/Layout.jsx b/frontend/src/components/Layout.jsx
+index 7822456..a22decd 100644
+--- a/frontend/src/components/Layout.jsx
++++ b/frontend/src/components/Layout.jsx
+@@ -27,7 +27,6 @@ function buildNav(lang) {
+     { id: "notebook",  icon: FileText,        group: "data" },
+     { id: "data",      icon: Upload,          group: "data" },
+     { id: "legal",     icon: Scale,           group: "data" },
+-    { id: "settings",  icon: Settings,        group: "data" },
+   ].map((item) => ({
+     ...item,
+     label: t(lang, `nav_${item.id}`),
+@@ -134,7 +133,8 @@ function Sidebar({ nav, page, setPage, eventLabel, lang, onClose }) {
+ export default function Layout({ page, setPage, eventLabel, onScout, lang = "ru", children }) {
+   const [menuOpen, setMenuOpen] = useState(false);
+   const nav = buildNav(lang);
+-  const title = nav.find((n) => n.id === page)?.label || nav[0].label;
++  // Settings is reachable only from the bottom-left button, so it is not in `nav`
++  const title = page === "settings" ? t(lang, "nav_settings") : nav.find((n) => n.id === page)?.label || nav[0].label;
+ 
+   return (
+     <div className="min-h-screen bg-zinc-950 text-white">
