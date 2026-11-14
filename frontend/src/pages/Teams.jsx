@@ -2,12 +2,14 @@ import { tr } from "../lib/i18n";
 import { useMemo, useState } from "react";
 import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
 import { allStats, fmt, initials, priority, roleLabel, stats } from "../lib/model";
+import TeamReport from "../components/TeamReport";
 
 export default function Teams({ db, setPage, onAddTeam }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
   const [active, setActive] = useState(null);
   const [open, setOpen] = useState(false);
+  const [report, setReport] = useState(false);
   const list = useMemo(
     () =>
       allStats(db)
@@ -20,10 +22,14 @@ export default function Teams({ db, setPage, onAddTeam }) {
   if (active) {
     const t = db.teams.find((x) => x.id === active);
     const s = stats(db, t);
+    if (report) return <TeamReport db={db} teamId={active} onClose={() => setReport(false)} />;
     return (
       <div>
         <Button variant="ghost" onClick={() => setActive(null)}>
           {tr("← Все команды")}
+        </Button>
+        <Button variant="secondary" className="ml-2" onClick={() => setReport(true)}>
+          {tr("Печатный отчёт")}
         </Button>
         <div className="mt-4 flex items-center gap-3">
           <span className="grid h-12 w-12 place-items-center rounded-xl bg-white text-sm font-bold text-black" aria-hidden="true">
