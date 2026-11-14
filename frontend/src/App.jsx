@@ -118,23 +118,50 @@ function EventSelect({ onSelect, lang }) {
   const skipLoading = () =>
     onSelect({ year, eventCode: eventCode.trim().toUpperCase(), eventName, teams: [] });
 
+  // Render's free tier "sleeps": the first request can fail or hang while the server wakes up.
+  const fetchWithRetry = async (url, tries = 3) => {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 25000);
+      try {
+        const r = await fetch(url, { headers: { Accept: "application/json" }, signal: ctrl.signal });
+        clearTimeout(timer);
+        // 502/503/504 = proxy is up but the app is still starting: try again
+        if (r.status >= 502 && r.status <= 504 && i < tries - 1) {
+          await new Promise((res) => setTimeout(res, 3000 * (i + 1)));
+          continue;
+        }
+        return r;
+      } catch (err) {
+        clearTimeout(timer);
+        lastErr = err;
+        if (i < tries - 1) await new Promise((res) => setTimeout(res, 3000 * (i + 1)));
+      }
+    }
+    throw lastErr;
+  };
+
   const loadEvents = async (y) => {
     if (eventsCache.current[y]) return eventsCache.current[y];
     setLoading(true);
     try {
       const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-      const response = await fetch(baseUrl + `/api/ftcscout/events?season=${y}`, { headers: { Accept: "application/json" } });
+      const response = await fetchWithRetry(baseUrl + `/api/ftcscout/events?season=${y}`);
       const data = await response.json().catch(() => ({}));
-      eventsCache.current[y] = data.events || [];
+      const events = Array.isArray(data.events) ? data.events : [];
+      const failed = !response.ok || Boolean(data.error);
       setEventsError(data.error || (response.ok ? "" : `HTTP ${response.status}`));
+      // Cache only successful loads, otherwise one failed request would break search until reload
+      if (!failed) eventsCache.current[y] = events;
+      return events;
     } catch (err) {
-      setEventsError(err.message);
+      setEventsError(err.name === "AbortError" ? "timeout" : err.message);
       console.error("Search error:", err);
-      eventsCache.current[y] = [];
+      return [];
     } finally {
       setLoading(false);
     }
-    return eventsCache.current[y];
   };
 
   const runSearch = async (query, y = year) => {
@@ -245,7 +272,10 @@ function EventSelect({ onSelect, lang }) {
                       {loading
                         ? ru ? tr("Загружаю события…") : "Loading events…"
                         : eventsError
-                          ? (ru ? tr("Не удалось загрузить список событий: ") : "Could not load the event list: ") + eventsError
+                          ? (ru ? tr("Не удалось загрузить список событий: ") : "Could not load the event list: ") + eventsError +
+                            (/fetch|timeout|HTTP 5/i.test(eventsError)
+                              ? " " + (ru ? tr("Сервер мог «уснуть» — подождите минуту и повторите поиск.") : "The server may be waking up — wait a minute and search again.")
+                              : "")
                           : ru ? tr("Ничего не найдено. Можно ввести код события ниже вручную.") : "Nothing found. You can type the event code manually below."}
                     </div>
                   ) : (

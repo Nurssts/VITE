@@ -125,6 +125,7 @@ export const EN = {
   "Не используются: Google Analytics, рекламные SDK, платёжные SDK, session replay.": "Not used: Google Analytics, advertising SDKs, payment SDKs, session replay.",
   "Не удалось загрузить команды события. ": "Could not load the event's teams. ",
   "Не удалось загрузить список событий: ": "Could not load the event list: ",
+  "Сервер мог «уснуть» — подождите минуту и повторите поиск.": "The server may be waking up — wait a minute and search again.",
   "Не указывайте ФИО несовершеннолетних.": "Do not enter the names of minors.",
   "Недостаточно данных для пары.": "Not enough data for the pair.",
   "Неизвестно": "Unknown",
