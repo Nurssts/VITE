@@ -5,6 +5,7 @@ Requires GOOGLE_API_KEY environment variable.
 
 from typing import Any, List
 import asyncio
+import os
 import google.generativeai as genai
 from pydantic import BaseModel
 
@@ -32,9 +33,10 @@ async def analyze_match_with_gemini(
 ) -> dict[str, Any]:
     """Use Gemini AI to analyze match data and provide insights."""
     try:
-        api_key = genai.configure(api_key=None)  # Will read from GOOGLE_API_KEY env var
+        api_key = os.getenv("GOOGLE_API_KEY", "").strip()
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
+        genai.configure(api_key=api_key)
 
         model = genai.GenerativeModel('gemini-1.5-pro')
 
@@ -82,9 +84,10 @@ async def get_alliance_recommendation(
 ) -> dict[str, Any]:
     """Use Gemini AI to recommend alliance partners."""
     try:
-        api_key = genai.configure(api_key=None)
+        api_key = os.getenv("GOOGLE_API_KEY", "").strip()
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
+        genai.configure(api_key=api_key)
 
         model = genai.GenerativeModel('gemini-1.5-pro')
 

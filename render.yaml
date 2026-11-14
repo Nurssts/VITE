@@ -20,6 +20,6 @@ services:
       - key: GOOGLE_API_KEY
         sync: false
       - key: AI_ENABLED
-        value: false
+        value: true
       - key: CORS_ORIGINS
         value: https://nurssts.github.io

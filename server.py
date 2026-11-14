@@ -127,9 +127,14 @@ async def health() -> dict[str, Any]:
     }
 
 
+def ai_is_enabled() -> bool:
+    """AI features are on by default; set AI_ENABLED=false to turn them off."""
+    return os.getenv("AI_ENABLED", "true").strip().lower() != "false"
+
+
 @app.get("/api/sdk")
 async def sdk_inventory() -> dict[str, Any]:
-    ai_enabled = os.getenv("AI_ENABLED", "false").strip().lower() == "true"
+    ai_enabled = ai_is_enabled()
     third_party = [
         {
             "name": "FIRST FTC Events API",
@@ -156,8 +161,8 @@ async def sdk_inventory() -> dict[str, Any]:
     if ai_enabled:
         third_party.append({
             "name": "Google Gemini AI",
-            "purpose": "Optional AI-powered match analysis and alliance recommendations (only when explicitly enabled).",
-            "data": "Scout notes and team data are sent to Google when you use AI features. Do not enter personal data, especially data of minors.",
+            "purpose": "AI-powered match analysis and alliance recommendations (enabled by default; set AI_ENABLED=false to disable).",
+            "data": "Scout notes and team data are sent to Google when AI features are used. Do not enter personal data, especially data of minors.",
             "url": "https://ai.google.dev",
             "required": False,
         })
@@ -259,7 +264,7 @@ async def ftcscout_event_teams(code: str, season: int = Query(2026)) -> Any:
 @limiter.limit("10/minute")
 async def gemini_analyze_match(request: Request, body: dict[str, Any]) -> Any:
     """Analyze match using Gemini AI."""
-    if os.getenv("AI_ENABLED", "false").strip().lower() != "true":
+    if not ai_is_enabled():
         raise HTTPException(status_code=503, detail="AI features are disabled on this server.")
     try:
         result = await analyze_match_with_gemini(
@@ -277,7 +282,7 @@ async def gemini_analyze_match(request: Request, body: dict[str, Any]) -> Any:
 @limiter.limit("10/minute")
 async def gemini_recommendation(request: Request, body: dict[str, Any]) -> Any:
     """Get alliance partner recommendations using Gemini AI."""
-    if os.getenv("AI_ENABLED", "false").strip().lower() != "true":
+    if not ai_is_enabled():
         raise HTTPException(status_code=503, detail="AI features are disabled on this server.")
     try:
         result = await get_alliance_recommendation(
