@@ -1,0 +1,169 @@
+import { useMemo, useState } from "react";
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from "recharts";
+import { tr } from "../lib/i18n";
+import { fmt, pairModel, roleLabel, stats, teamLabel } from "../lib/model";
+
+// Printable one-page scouting report. Optional partner team adds an alliance section
+// (synergy, role fit, collision risk) using the existing pairModel from the Analysis page.
+export default function TeamReport({ db, teamId, onClose }) {
+  const t = db.teams.find((x) => x.id === teamId);
+  const s = stats(db, t);
+  const [partnerId, setPartnerId] = useState("");
+  const partner = db.teams.find((x) => x.id === partnerId && x.id !== teamId);
+  const pair = useMemo(() => (partner ? pairModel(db, teamId, partner.id) : null), [db, teamId, partner]);
+  // Top-3 partners by synergy (skipped for very large pools to keep the UI fast)
+  const top = useMemo(() => {
+    if (!t || db.teams.length > 300) return [];
+    return db.teams
+      .filter((x) => x.id !== teamId)
+      .map((x) => ({ team: x, score: pairModel(db, teamId, x.id)?.score ?? -1 }))
+      .filter((x) => x.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+  }, [db, teamId, t]);
+  if (!t || !s) return null;
+
+  const rows = [
+    [tr("Наблюдений"), s.count],
+    [tr("Оценка"), fmt(s.mean)],
+    [tr("Разброс (σ)"), `± ${fmt(s.sd)}`],
+    [tr("Средний авто-счёт"), fmt(s.auto)],
+    [tr("Средний hive (телеоп)"), fmt(s.teleopTips)],
+    [tr("Цветы размещено"), fmt(s.flowerPlaced)],
+    [tr("Парковка"), `${Math.round(s.parkRate * 100)}%`],
+    [tr("DNF"), `${Math.round(s.dnf * 100)}%`],
+    [tr("Уверенность"), s.confidence],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[120] overflow-auto bg-white text-black">
+      <style>{`@media print { .no-print { display: none !important; } body * { visibility: hidden; } .report-root, .report-root * { visibility: visible; } .report-root { position: absolute; inset: 0; } }`}</style>
+      <div className="no-print sticky top-0 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white p-3">
+        <button className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm" onClick={onClose}>
+          {tr("← Назад")}
+        </button>
+        <div className="flex items-center gap-2">
+          <select
+            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
+            value={partnerId}
+            onChange={(e) => setPartnerId(e.target.value)}
+            aria-label={tr("Партнёр по альянсу")}
+          >
+            <option value="">{tr("Без альянса")}</option>
+            {db.teams
+              .filter((x) => x.id !== teamId)
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {teamLabel(x)}
+                </option>
+              ))}
+          </select>
+          {top.length ? (
+            <div className="hidden items-center gap-1 sm:flex" aria-label={tr("Лучшие партнёры")}>
+              {top.map((x) => (
+                <button
+                  key={x.team.id}
+                  className={`rounded-lg border px-2 py-1.5 text-xs ${partnerId === x.team.id ? "border-black bg-zinc-100" : "border-zinc-300"}`}
+                  onClick={() => setPartnerId(x.team.id)}
+                  title={`${tr("Синергия")}: ${Math.round(x.score)}`}
+                >
+                  {x.team.number} · {Math.round(x.score)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button className="rounded-lg bg-black px-3 py-1.5 text-sm text-white" onClick={() => window.print()}>
+            {tr("Печать / PDF")}
+          </button>
+        </div>
+      </div>
+
+      <div className="report-root mx-auto max-w-2xl p-8">
+        <div className="text-xs uppercase tracking-wider text-zinc-500">
+          {tr("Скаутинг-отчёт")} · {db.meta.eventName || ""} {db.meta.eventCode ? `· ${db.meta.eventCode}` : ""}
+        </div>
+        <h1 className="mt-2 text-3xl font-semibold">{teamLabel(t)}</h1>
+        <p className="text-sm text-zinc-600">
+          {t.region || tr("регион не указан")} · {roleLabel(s)}
+        </p>
+
+        <table className="mt-6 w-full border-collapse text-sm">
+          <tbody>
+            {rows.map(([label, value]) => (
+              <tr key={label} className="border-b border-zinc-200">
+                <td className="py-2 text-zinc-600">{label}</td>
+                <td className="py-2 text-right font-semibold">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-4 h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart
+              data={["auto", "hive", "flower", "reliability"].map((k) => ({
+                k: k.toUpperCase(),
+                a: Math.round(s.profile[k]),
+                b: pair ? Math.round(pair.b.profile[k]) : undefined,
+              }))}
+            >
+              <PolarGrid stroke="#d4d4d8" />
+              <PolarAngleAxis dataKey="k" tick={{ fill: "#52525b", fontSize: 11 }} />
+              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+              <Radar name={String(t.number)} dataKey="a" stroke="#000" fill="#000" fillOpacity={0.25} isAnimationActive={false} />
+              {pair ? <Radar name={String(partner.number)} dataKey="b" stroke="#71717a" fill="#71717a" fillOpacity={0.2} strokeDasharray="4 3" isAnimationActive={false} /> : null}
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+        {pair ? (
+          <p className="text-center text-[11px] text-zinc-500">
+            {tr("Сплошная линия")}: {t.number} · {tr("пунктир")}: {partner.number}
+          </p>
+        ) : null}
+        <h2 className="mt-6 text-sm font-semibold">{tr("Профиль 0–100")}</h2>
+        {["auto", "hive", "flower", "reliability"].map((k) => (
+          <div key={k} className="mt-2 grid grid-cols-[110px_1fr_40px] items-center gap-2 text-xs">
+            <span className="uppercase text-zinc-500">{k}</span>
+            <div className="h-2 overflow-hidden rounded bg-zinc-200">
+              <div className="h-full bg-black" style={{ width: `${Math.round(s.profile[k])}%` }} />
+            </div>
+            <span className="text-right">{Math.round(s.profile[k])}</span>
+          </div>
+        ))}
+
+        {pair ? (
+          <>
+            <h2 className="mt-6 text-sm font-semibold">
+              {tr("Альянс с")} {teamLabel(partner)}
+            </h2>
+            <table className="mt-2 w-full border-collapse text-sm">
+              <tbody>
+                {[
+                  [tr("Синергия"), Math.round(pair.score)],
+                  [tr("Роли"), pair.roles.join(" + ")],
+                  [tr("Покрытие"), Math.round(pair.cover)],
+                  [tr("Разница профилей"), Math.round(pair.complement)],
+                  [tr("Риск коллизии"), `${pair.collision.level} · ${Math.round(pair.collision.score)}`],
+                ].map(([label, value]) => (
+                  <tr key={label} className="border-b border-zinc-200">
+                    <td className="py-2 text-zinc-600">{label}</td>
+                    <td className="py-2 text-right font-semibold">{value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {pair.collision.reasons?.[0] ? <p className="mt-2 text-sm text-zinc-700">{pair.collision.reasons[0]}</p> : null}
+          </>
+        ) : null}
+
+        {t.notes ? (
+          <>
+            <h2 className="mt-6 text-sm font-semibold">{tr("Заметки")}</h2>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{t.notes}</p>
+          </>
+        ) : null}
+        <p className="mt-8 text-[11px] text-zinc-500">{tr("Оценка вклада — сумма наблюдаемых действий, а не официальный счёт.")}</p>
+      </div>
+    </div>
+  );
+}

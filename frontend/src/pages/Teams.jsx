@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
 import { allStats, fmt, initials, priority, roleLabel, stats } from "../lib/model";
 import TeamReport from "../components/TeamReport";
+import RankingReport from "../components/RankingReport";
+import { downloadCsv } from "../lib/exportCsv";
 
 export default function Teams({ db, setPage, onAddTeam }) {
   const [q, setQ] = useState("");
@@ -10,6 +12,7 @@ export default function Teams({ db, setPage, onAddTeam }) {
   const [active, setActive] = useState(null);
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState(false);
+  const [ranking, setRanking] = useState(false);
   const list = useMemo(
     () =>
       allStats(db)
@@ -72,6 +75,8 @@ export default function Teams({ db, setPage, onAddTeam }) {
     );
   }
 
+  if (ranking) return <RankingReport db={db} onClose={() => setRanking(false)} />;
+
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -79,7 +84,15 @@ export default function Teams({ db, setPage, onAddTeam }) {
           <h1 className="text-3xl font-semibold tracking-tight">{tr("Команды")}</h1>
           <p className="mt-1 text-sm text-zinc-500">{tr("Профили, стабильность и объём скаутинга.")}</p>
         </div>
-        <Button onClick={() => setOpen(true)}>{tr("+ Добавить команду")}</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={!db.teams.length} onClick={() => setRanking(true)}>
+            {tr("Печатный рейтинг")}
+          </Button>
+          <Button variant="secondary" disabled={!db.teams.length} onClick={() => downloadCsv(db)}>
+            {tr("Экспорт CSV")}
+          </Button>
+          <Button onClick={() => setOpen(true)}>{tr("+ Добавить команду")}</Button>
+        </div>
       </div>
       <DemoBanner demo={db.meta.demo} />
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
