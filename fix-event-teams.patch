@@ -1,0 +1,41 @@
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index 768ddf3..21fb5d3 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -160,29 +160,15 @@ function EventSelect({ onSelect, lang }) {
+     setSearchQuery("");
+     setShowResults(false);
+ 
+-    // Load real teams from FTCScout API
++    // Load teams of THIS event only (not the whole FTCScout database)
++    const code = (event.code || event.eventCode || "").trim().toUpperCase();
++    const name = event.name || event.eventName || "";
+     try {
+-      const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+-      const response = await fetch((baseUrl || "") + `/api/ftcscout/teams`, {
+-        headers: { Accept: "application/json" }
+-      });
+-      const data = await response.json().catch(() => ({}));
+-
+-      if (data.teams && Array.isArray(data.teams)) {
+-        // Will be passed to onSelect as 'teams' parameter
+-        onSelect({
+-          year,
+-          eventCode: event.code || event.eventCode || "",
+-          eventName: event.name || event.eventName || "",
+-          teams: data.teams
+-        });
+-      } else {
+-        onSelect({ year, eventCode: event.code || event.eventCode || "", eventName: event.name || event.eventName || "", teams: [] });
+-      }
++      const { teams } = await loadEventTeams(year, code);
++      onSelect({ year, eventCode: code, eventName: name, teams: teamsToDb(teams) });
+     } catch (err) {
+-      console.error("Error loading teams:", err);
+-      // Fallback: just use event info without teams
+-      onSelect({ year, eventCode: event.code || event.eventCode || "", eventName: event.name || event.eventName || "" });
++      console.error("Error loading event teams:", err);
++      onSelect({ year, eventCode: code, eventName: name, teams: [] });
+     }
+   };
+ 
