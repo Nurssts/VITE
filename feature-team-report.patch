@@ -1,10 +1,75 @@
+diff --git a/frontend/src/components/RankingReport.jsx b/frontend/src/components/RankingReport.jsx
+new file mode 100644
+index 0000000..048ec62
+--- /dev/null
++++ b/frontend/src/components/RankingReport.jsx
+@@ -0,0 +1,58 @@
++import { tr } from "../lib/i18n";
++import { fmt, priority, roleLabel } from "../lib/model";
++import { rankedStats } from "../lib/exportCsv";
++
++// Printable ranking sheet of all teams (one table, black & white).
++export default function RankingReport({ db, onClose }) {
++  const list = rankedStats(db);
++  return (
++    <div className="fixed inset-0 z-[120] overflow-auto bg-white text-black">
++      <style>{`@media print { .no-print { display: none !important; } body * { visibility: hidden; } .report-root, .report-root * { visibility: visible; } .report-root { position: absolute; inset: 0; } tr { break-inside: avoid; } }`}</style>
++      <div className="no-print sticky top-0 flex items-center justify-between border-b border-zinc-200 bg-white p-3">
++        <button className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm" onClick={onClose}>
++          {tr("← Назад")}
++        </button>
++        <button className="rounded-lg bg-black px-3 py-1.5 text-sm text-white" onClick={() => window.print()}>
++          {tr("Печать / PDF")}
++        </button>
++      </div>
++      <div className="report-root mx-auto max-w-4xl p-8">
++        <div className="text-xs uppercase tracking-wider text-zinc-500">
++          {tr("Рейтинг команд")} · {db.meta.eventName || ""} {db.meta.eventCode ? `· ${db.meta.eventCode}` : ""}
++        </div>
++        <h1 className="mt-2 text-2xl font-semibold">{tr("Рейтинг команд")}</h1>
++        <table className="mt-4 w-full border-collapse text-xs">
++          <thead>
++            <tr className="border-b-2 border-black text-left">
++              {["#", tr("Команда"), tr("Роль"), tr("Приор."), tr("Матчи"), tr("Оценка"), "σ", "Auto", "Hive", "Flower", "DNF"].map((h) => (
++                <th key={h} className="py-1.5 pr-2 font-semibold">
++                  {h}
++                </th>
++              ))}
++            </tr>
++          </thead>
++          <tbody>
++            {list.map((s, i) => (
++              <tr key={s.team.id} className="border-b border-zinc-200">
++                <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
++                <td className="py-1.5 pr-2 font-medium">
++                  {s.team.number} · {s.team.name}
++                </td>
++                <td className="py-1.5 pr-2">{roleLabel(s)}</td>
++                <td className="py-1.5 pr-2">{tr(priority(s))}</td>
++                <td className="py-1.5 pr-2">{s.count}</td>
++                <td className="py-1.5 pr-2 font-semibold">{fmt(s.mean)}</td>
++                <td className="py-1.5 pr-2">± {fmt(s.sd)}</td>
++                <td className="py-1.5 pr-2">{fmt(s.auto)}</td>
++                <td className="py-1.5 pr-2">{fmt(s.hive)}</td>
++                <td className="py-1.5 pr-2">{fmt(s.flower)}</td>
++                <td className="py-1.5 pr-2">{Math.round(s.dnf * 100)}%</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++        <p className="mt-6 text-[11px] text-zinc-500">{tr("Оценка вклада — сумма наблюдаемых действий, а не официальный счёт.")}</p>
++      </div>
++    </div>
++  );
++}
 diff --git a/frontend/src/components/TeamReport.jsx b/frontend/src/components/TeamReport.jsx
 new file mode 100644
-index 0000000..d50e039
+index 0000000..d524baf
 --- /dev/null
 +++ b/frontend/src/components/TeamReport.jsx
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,169 @@
 +import { useMemo, useState } from "react";
++import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from "recharts";
 +import { tr } from "../lib/i18n";
 +import { fmt, pairModel, roleLabel, stats, teamLabel } from "../lib/model";
 +
@@ -16,6 +81,16 @@ index 0000000..d50e039
 +  const [partnerId, setPartnerId] = useState("");
 +  const partner = db.teams.find((x) => x.id === partnerId && x.id !== teamId);
 +  const pair = useMemo(() => (partner ? pairModel(db, teamId, partner.id) : null), [db, teamId, partner]);
++  // Top-3 partners by synergy (skipped for very large pools to keep the UI fast)
++  const top = useMemo(() => {
++    if (!t || db.teams.length > 300) return [];
++    return db.teams
++      .filter((x) => x.id !== teamId)
++      .map((x) => ({ team: x, score: pairModel(db, teamId, x.id)?.score ?? -1 }))
++      .filter((x) => x.score >= 0)
++      .sort((a, b) => b.score - a.score)
++      .slice(0, 3);
++  }, [db, teamId, t]);
 +  if (!t || !s) return null;
 +
 +  const rows = [
@@ -53,6 +128,20 @@ index 0000000..d50e039
 +                </option>
 +              ))}
 +          </select>
++          {top.length ? (
++            <div className="hidden items-center gap-1 sm:flex" aria-label={tr("Лучшие партнёры")}>
++              {top.map((x) => (
++                <button
++                  key={x.team.id}
++                  className={`rounded-lg border px-2 py-1.5 text-xs ${partnerId === x.team.id ? "border-black bg-zinc-100" : "border-zinc-300"}`}
++                  onClick={() => setPartnerId(x.team.id)}
++                  title={`${tr("Синергия")}: ${Math.round(x.score)}`}
++                >
++                  {x.team.number} · {Math.round(x.score)}
++                </button>
++              ))}
++            </div>
++          ) : null}
 +          <button className="rounded-lg bg-black px-3 py-1.5 text-sm text-white" onClick={() => window.print()}>
 +            {tr("Печать / PDF")}
 +          </button>
@@ -79,6 +168,28 @@ index 0000000..d50e039
 +          </tbody>
 +        </table>
 +
++        <div className="mt-4 h-64 w-full">
++          <ResponsiveContainer width="100%" height="100%">
++            <RadarChart
++              data={["auto", "hive", "flower", "reliability"].map((k) => ({
++                k: k.toUpperCase(),
++                a: Math.round(s.profile[k]),
++                b: pair ? Math.round(pair.b.profile[k]) : undefined,
++              }))}
++            >
++              <PolarGrid stroke="#d4d4d8" />
++              <PolarAngleAxis dataKey="k" tick={{ fill: "#52525b", fontSize: 11 }} />
++              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
++              <Radar name={String(t.number)} dataKey="a" stroke="#000" fill="#000" fillOpacity={0.25} isAnimationActive={false} />
++              {pair ? <Radar name={String(partner.number)} dataKey="b" stroke="#71717a" fill="#71717a" fillOpacity={0.2} strokeDasharray="4 3" isAnimationActive={false} /> : null}
++            </RadarChart>
++          </ResponsiveContainer>
++        </div>
++        {pair ? (
++          <p className="text-center text-[11px] text-zinc-500">
++            {tr("Сплошная линия")}: {t.number} · {tr("пунктир")}: {partner.number}
++          </p>
++        ) : null}
 +        <h2 className="mt-6 text-sm font-semibold">{tr("Профиль 0–100")}</h2>
 +        {["auto", "hive", "flower", "reliability"].map((k) => (
 +          <div key={k} className="mt-2 grid grid-cols-[110px_1fr_40px] items-center gap-2 text-xs">
@@ -126,15 +237,103 @@ index 0000000..d50e039
 +    </div>
 +  );
 +}
+diff --git a/frontend/src/lib/exportCsv.js b/frontend/src/lib/exportCsv.js
+new file mode 100644
+index 0000000..66272c7
+--- /dev/null
++++ b/frontend/src/lib/exportCsv.js
+@@ -0,0 +1,48 @@
++import { allStats, fmt, priority, roleLabel } from "./model";
++
++// Neutralise spreadsheet formula injection (names/regions come from external APIs).
++function cell(v) {
++  let s = String(v ?? "");
++  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
++  return `"${s.replace(/"/g, '""')}"`;
++}
++
++export function rankedStats(db) {
++  return allStats(db).sort((a, b) => b.mean - a.mean);
++}
++
++export function teamsToCsv(db) {
++  const head = ["rank", "number", "name", "region", "role", "priority", "matches", "score", "sd", "auto", "hive", "flower", "park_pct", "dnf_pct", "confidence"];
++  const rows = rankedStats(db).map((s, i) => [
++    i + 1,
++    s.team.number,
++    s.team.name,
++    s.team.region || "",
++    roleLabel(s),
++    priority(s),
++    s.count,
++    fmt(s.mean),
++    fmt(s.sd),
++    fmt(s.auto),
++    fmt(s.hive),
++    fmt(s.flower),
++    Math.round(s.parkRate * 100),
++    Math.round(s.dnf * 100),
++    s.confidence,
++  ]);
++  return [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
++}
++
++export function downloadCsv(db) {
++  // BOM so Excel opens Cyrillic correctly
++  const blob = new Blob(["\ufeff" + teamsToCsv(db)], { type: "text/csv;charset=utf-8" });
++  const url = URL.createObjectURL(blob);
++  const a = document.createElement("a");
++  const code = (db.meta.eventCode || "teams").replace(/[^\w-]/g, "_");
++  a.href = url;
++  a.download = `vite-${code}-ranking.csv`;
++  document.body.appendChild(a);
++  a.click();
++  a.remove();
++  setTimeout(() => URL.revokeObjectURL(url), 1000);
++}
+diff --git a/frontend/src/lib/exportCsv.test.js b/frontend/src/lib/exportCsv.test.js
+new file mode 100644
+index 0000000..0095b3c
+--- /dev/null
++++ b/frontend/src/lib/exportCsv.test.js
+@@ -0,0 +1,26 @@
++import { describe, expect, it } from "vitest";
++import { teamsToCsv } from "./exportCsv";
++
++const db = {
++  version: 2,
++  meta: { demo: false, eventCode: "TEST", eventName: "Test", season: "2026-2027" },
++  teams: [
++    { id: "1", number: "1", name: '=HYPERLINK("x")', region: "Almaty, KZ", style: "", notes: "" },
++    { id: "2", number: "2", name: 'Say "hi"', region: "", style: "", notes: "" },
++  ],
++  records: [],
++  draft: { captain: "", picked: [], removed: [] },
++};
++
++describe("teamsToCsv", () => {
++  const csv = teamsToCsv(db);
++  const lines = csv.split("\r\n");
++  it("has header and one row per team", () => {
++    expect(lines).toHaveLength(3);
++    expect(lines[0].startsWith('"rank","number","name"')).toBe(true);
++  });
++  it("neutralises formulas and escapes quotes", () => {
++    expect(csv).toContain(`"'=HYPERLINK(""x"")"`);
++    expect(csv).toContain('"Say ""hi"""');
++  });
++});
 diff --git a/frontend/src/pages/Teams.jsx b/frontend/src/pages/Teams.jsx
-index 765bf23..f91b692 100644
+index 765bf23..5b91bdc 100644
 --- a/frontend/src/pages/Teams.jsx
 +++ b/frontend/src/pages/Teams.jsx
-@@ -2,12 +2,14 @@ import { tr } from "../lib/i18n";
+@@ -2,12 +2,17 @@ import { tr } from "../lib/i18n";
  import { useMemo, useState } from "react";
  import { Button, DemoBanner, Field, inputClass, Panel } from "../components/ui";
  import { allStats, fmt, initials, priority, roleLabel, stats } from "../lib/model";
 +import TeamReport from "../components/TeamReport";
++import RankingReport from "../components/RankingReport";
++import { downloadCsv } from "../lib/exportCsv";
  
  export default function Teams({ db, setPage, onAddTeam }) {
    const [q, setQ] = useState("");
@@ -142,10 +341,11 @@ index 765bf23..f91b692 100644
    const [active, setActive] = useState(null);
    const [open, setOpen] = useState(false);
 +  const [report, setReport] = useState(false);
++  const [ranking, setRanking] = useState(false);
    const list = useMemo(
      () =>
        allStats(db)
-@@ -20,11 +22,15 @@ export default function Teams({ db, setPage, onAddTeam }) {
+@@ -20,11 +25,15 @@ export default function Teams({ db, setPage, onAddTeam }) {
    if (active) {
      const t = db.teams.find((x) => x.id === active);
      const s = stats(db, t);
@@ -161,3 +361,29 @@ index 765bf23..f91b692 100644
          <div className="mt-4 flex items-center gap-3">
            <span className="grid h-12 w-12 place-items-center rounded-xl bg-white text-sm font-bold text-black" aria-hidden="true">
              {initials(t)}
+@@ -66,6 +75,8 @@ export default function Teams({ db, setPage, onAddTeam }) {
+     );
+   }
+ 
++  if (ranking) return <RankingReport db={db} onClose={() => setRanking(false)} />;
++
+   return (
+     <div>
+       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+@@ -73,7 +84,15 @@ export default function Teams({ db, setPage, onAddTeam }) {
+           <h1 className="text-3xl font-semibold tracking-tight">{tr("Команды")}</h1>
+           <p className="mt-1 text-sm text-zinc-500">{tr("Профили, стабильность и объём скаутинга.")}</p>
+         </div>
+-        <Button onClick={() => setOpen(true)}>{tr("+ Добавить команду")}</Button>
++        <div className="flex flex-wrap gap-2">
++          <Button variant="secondary" disabled={!db.teams.length} onClick={() => setRanking(true)}>
++            {tr("Печатный рейтинг")}
++          </Button>
++          <Button variant="secondary" disabled={!db.teams.length} onClick={() => downloadCsv(db)}>
++            {tr("Экспорт CSV")}
++          </Button>
++          <Button onClick={() => setOpen(true)}>{tr("+ Добавить команду")}</Button>
++        </div>
+       </div>
+       <DemoBanner demo={db.meta.demo} />
+       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
