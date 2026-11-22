@@ -15,7 +15,7 @@ export const TOOL_KINDS = {
   get_scouting_gaps: "read",
   find_anomalies: "read",
   search_records: "read",
-  remember: "assist",
+  remember: "action", // persistent: approved by the user (guards against injected notes)
   open_page: "assist",
   set_draft: "action",
   mark_teams_picked: "action",
@@ -34,6 +34,10 @@ const clampInt = (v, lo, hi, d) => {
 };
 
 function brief(s) {
+  if (!s.count) {
+    // No scouting for this team: say so instead of reporting model zeros.
+    return { team: s.team.number, name: s.team.name || "", matches: 0, scouting: "none", role: null, score: null, sd: null };
+  }
   return {
     team: s.team.number,
     name: s.team.name || "",
@@ -47,6 +51,10 @@ function brief(s) {
     reliability: round(s.profile.reliability, 0),
     dnfPct: Math.round(s.dnf * 100),
   };
+}
+
+function eventScouted(db) {
+  return db.records.some((r) => !db.meta.eventCode || r.eventCode === db.meta.eventCode);
 }
 
 function scheduleOf(db) {
@@ -99,9 +107,16 @@ export function createToolbox(env) {
       const opr = oprResult();
       const n = clampInt(limit, 1, 40, 10);
       const rows = allStats(d).map((s) => ({ ...brief(s), opr: opr.opr.has(s.team.number) ? round(opr.opr.get(s.team.number)) : null }));
-      const key = { score: "score", opr: "opr", auto: "auto", hive: "hive", flower: "flower", reliability: "reliability", matches: "matches" }[sort_by] || "score";
+      let key = { score: "score", opr: "opr", auto: "auto", hive: "hive", flower: "flower", reliability: "reliability", matches: "matches" }[sort_by] || "score";
+      const scouted = eventScouted(d);
+      if (!scouted && key !== "opr" && opr.matches) key = "opr"; // nothing scouted yet: official OPR is the only real signal
       rows.sort((a, b) => (b[key] ?? -Infinity) - (a[key] ?? -Infinity));
-      return { sortedBy: key, teams: rows.slice(0, n), note: "score = scouted contribution per match (model estimate); opr = from official alliance scores" };
+      return {
+        sortedBy: key,
+        basis: key === "opr" ? "opr" : "scouting",
+        teams: rows.slice(0, n),
+        note: scouted ? "score = scouted contribution per match (model estimate); opr = from official alliance scores" : "No scouting records yet: ranked by official OPR. Scouting-based fields are null.",
+      };
     },
 
     get_team({ team }) {
@@ -114,6 +129,34 @@ export function createToolbox(env) {
       const played = theirs.filter((m) => m.played);
       const won = played.filter((m) => (m.red.includes(t.number) ? m.redScore > m.blueScore : m.blueScore > m.redScore)).length;
       const side = (m) => (m.red.includes(t.number) ? ["red", m.red, m.blue] : ["blue", m.blue, m.red]);
+      const official = played.length ? { played: played.length, won } : null;
+      const upcoming = theirs
+        .filter((m) => !m.played)
+        .slice(0, 5)
+        .map((m) => {
+          const [alliance, own, opp] = side(m);
+          return { match: m.number, level: m.level, alliance, partner: own.filter((x) => x !== t.number), opponents: opp };
+        });
+      const teamOpr = opr.opr.has(t.number) ? round(opr.opr.get(t.number)) : null;
+      const allOpr = [...opr.opr.values()].sort((a, b) => b - a);
+      const oprContext = teamOpr === null || !allOpr.length ? null : {
+        eventAverage: round(allOpr.reduce((x, y) => x + y, 0) / allOpr.length),
+        rank: allOpr.findIndex((v) => round(v) === teamOpr) + 1,
+        ofTeams: allOpr.length,
+      };
+      if (!s.count) {
+        // Unscouted: only real data (official results), no model estimates.
+        return {
+          ...brief(s),
+          region: t.region || "",
+          opr: teamOpr,
+          oprContext,
+          official,
+          strategyNote: shareNotes() ? t.notes || "" : "(notes not shared)",
+          upcoming,
+          note: "This team has not been scouted yet; use OPR and official results, and suggest scouting it.",
+        };
+      }
       return {
         ...brief(s),
         region: t.region || "",
@@ -126,20 +169,15 @@ export function createToolbox(env) {
         cycles: { pollenSec: round(s.pollenCycle) || null, nectarSec: round(s.nectarCycle) || null },
         autonomousLanes: s.trajectories.filter((x) => x !== "unknown"),
         confidence: s.confidenceLevel,
-        opr: opr.opr.has(t.number) ? round(opr.opr.get(t.number)) : null,
-        official: played.length ? { played: played.length, won } : null,
+        opr: teamOpr,
+        oprContext,
+        official,
         strategyNote: shareNotes() ? t.notes || "" : "(notes not shared)",
         recentMatches: [...s.records]
           .sort((a, b) => (b.matchNo || 0) - (a.matchNo || 0))
           .slice(0, 12)
           .map((r) => ({ match: r.matchNo || null, ...breakdown(r), disabled: r.disabled, note: shareNotes() ? (r.notes || "").slice(0, 160) : undefined })),
-        upcoming: theirs
-          .filter((m) => !m.played)
-          .slice(0, 5)
-          .map((m) => {
-            const [alliance, own, opp] = side(m);
-            return { match: m.number, level: m.level, alliance, partner: own.filter((x) => x !== t.number), opponents: opp };
-          }),
+        upcoming,
       };
     },
 
@@ -147,6 +185,17 @@ export function createToolbox(env) {
       if (!Array.isArray(teams) || teams.length !== 2) throw new ToolError("Give exactly two team numbers.");
       const [a, b] = teams.map((x) => teamBy(x));
       const p = pairModel(db(), a.id, b.id);
+      if (!p.a.count && !p.b.count) {
+        const opr = oprResult().opr;
+        const known = opr.has(a.number) && opr.has(b.number);
+        return {
+          teams: [a.number, b.number],
+          basis: known ? "opr" : "none",
+          expectedPoints: known ? round(opr.get(a.number) + opr.get(b.number)) : null,
+          oprEach: known ? [round(opr.get(a.number)), round(opr.get(b.number))] : null,
+          note: "Neither team is scouted yet: role synergy and collision risk cannot be estimated; expected points are the sum of official OPR.",
+        };
+      }
       return {
         teams: [a.number, b.number],
         synergy: round(p.score, 0),
@@ -165,7 +214,23 @@ export function createToolbox(env) {
       if (!Array.isArray(red) || !Array.isArray(blue) || red.length !== 2 || blue.length !== 2) throw new ToolError("red and blue need two team numbers each.");
       const ids = [...red, ...blue].map((x) => teamBy(x).id);
       if (new Set(ids).size !== 4) throw new ToolError("The four teams must be different.");
-      const r = simulate(db(), ids, 2000, { seed: 2026 });
+      const d0 = db();
+      const scoutedCount = ids.reduce((acc, id) => acc + stats(d0, d0.teams.find((t) => t.id === id)).count, 0);
+      if (!scoutedCount) {
+        const p = predictMatch(d0, red.map(str), blue.map(str), oprResult()).opr;
+        if (!p) return { error: "No scouting and no official results for these teams yet — nothing to simulate." };
+        return {
+          red: red.map(str),
+          blue: blue.map(str),
+          basis: "opr",
+          redWinPct: Math.round(p.pRed * 100),
+          blueWinPct: 100 - Math.round(p.pRed * 100),
+          meanRed: round(p.red, 0),
+          meanBlue: round(p.blue, 0),
+          note: "No scouting for these teams: forecast from official OPR (normal model).",
+        };
+      }
+      const r = simulate(d0, ids, 2000, { seed: 2026 });
       return {
         red: red.map(str),
         blue: blue.map(str),
@@ -213,11 +278,28 @@ export function createToolbox(env) {
       const taken = new Set([...(d.draft?.removed || [])]);
       const pool = d.teams.filter((t) => t.id !== cap.id && !taken.has(t.id));
       const n = clampInt(limit, 1, 20, 8);
+      const oprMap = oprResult().opr;
+      if (!eventScouted(d)) {
+        const capOpr = oprMap.get(cap.number) ?? 0;
+        const ranked = pool
+          .filter((t) => oprMap.has(t.number))
+          .map((t) => ({ team: t.number, name: t.name, opr: round(oprMap.get(t.number)), expectedAlliancePoints: round(capOpr + oprMap.get(t.number), 0) }))
+          .sort((a, b) => b.opr - a.opr);
+        const denial = ranked[0];
+        return {
+          captain: cap.number,
+          basis: "opr",
+          note: "No scouting records yet: partners ranked by official OPR. Roles, synergy and collision risk need scouting.",
+          excludedTaken: [...taken].map((id) => d.teams.find((t) => t.id === id)?.number).filter(Boolean),
+          partners: ranked.slice(0, n),
+          denialPick: denial ? { team: denial.team, reason: "highest OPR left in the pool" } : null,
+        };
+      }
       const ranked = pool
         .map((t) => ({ t, p: pairModel(d, cap.id, t.id), s: stats(d, t) }))
         .sort((a, b) => b.p.score - a.p.score)
         .slice(0, n)
-        .map(({ t, p, s }) => ({ team: t.number, name: t.name, role: roleCode(s), synergy: round(p.score, 0), expectedAlliancePoints: round(p.mean, 0), collision: p.collision.level, matchesScouted: s.count, note: shareNotes() ? (t.notes || "").slice(0, 120) : undefined }));
+        .map(({ t, p, s }) => ({ team: t.number, name: t.name, role: s.count ? roleCode(s) : null, synergy: round(p.score, 0), expectedAlliancePoints: round(p.mean, 0), opr: oprMap.has(t.number) ? round(oprMap.get(t.number)) : null, collision: p.collision.level, matchesScouted: s.count, note: shareNotes() ? (t.notes || "").slice(0, 120) : undefined }));
       const denial = denialPick(d, cap.id, pool);
       return {
         captain: cap.number,

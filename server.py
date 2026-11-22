@@ -23,6 +23,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -42,6 +43,7 @@ VERSION = "3.0.0"
 MODEL_VERSION = "BIOBUZZ TU05 · 15.10.2026"
 DEFAULT_SEASON = 2026  # BIOBUZZ 2026-2027
 _TIMEOUT = httpx.Timeout(12.0, connect=5.0)
+MAX_BODY_BYTES = 1_000_000
 
 
 @asynccontextmanager
@@ -55,12 +57,7 @@ app = FastAPI(title="VITE · BioBuzz Alliance Matrix", version=VERSION, lifespan
 
 # ── Rate limiting ────────────────────────────────────────────────────────
 
-def client_ip(request: Request) -> str:
-    """Real client address behind Render's proxy (falls back to the socket peer)."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+from engine.security import client_ip  # noqa: E402  (rightmost trusted X-Forwarded-For hop)
 
 
 limiter = Limiter(key_func=client_ip)
@@ -98,12 +95,18 @@ CSP = "; ".join([
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     started = time.perf_counter()
+    # Refuse oversized API bodies before they are read into memory (largest legit body: AI chat history).
+    length = request.headers.get("content-length", "0")
+    if request.url.path.startswith("/api/") and (not length.isdigit() or int(length) > MAX_BODY_BYTES):
+        return JSONResponse({"detail": "Request body is too large."}, status_code=413)
     response = await call_next(request)
     h = response.headers
     h.setdefault("X-Content-Type-Options", "nosniff")
     h.setdefault("Referrer-Policy", "no-referrer")
     h.setdefault("X-Frame-Options", "DENY")
-    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=()")  # mic: voice dictation
+    if request.headers.get("x-forwarded-proto", request.url.scheme) == "https":
+        h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     path = request.url.path
     if path.startswith("/api/"):
         h.setdefault("Cache-Control", "no-store")
