@@ -58,7 +58,6 @@ export default function App() {
   }
 
   if (!prefs.event?.set) {
-    const hadEvent = Boolean(prefs.lastEvent?.set) && db.meta.eventCode;
     return (
       <>
         <EventSelect
@@ -73,7 +72,6 @@ export default function App() {
             toast(teams.length ? `${tr("Загружено команд")}: ${teams.length}` : tr("Ивент выбран. Добавьте команды вручную."));
             go("overview");
           }}
-          key={hadEvent ? "had" : "new"}
         />
         <FeedbackHost />
       </>
