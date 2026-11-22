@@ -1,3 +1,7 @@
+// Persistence: localStorage is the live copy, IndexedDB a second copy used for recovery.
+// Nothing leaves the device. Writes never throw into the UI: failures are reported via the
+// returned status so the app can warn the user (e.g. storage full).
+import { emptyDb, migrateDb } from "./db";
 import { makeSeed, PREFS_KEY, STORE_KEY } from "./model";
 
 const IDB_NAME = "vite-biobuzz";
@@ -5,6 +9,7 @@ const IDB_STORE = "kv";
 
 function idb() {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") return reject(new Error("no indexedDB"));
     const req = indexedDB.open(IDB_NAME, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
     req.onsuccess = () => resolve(req.result);
@@ -21,8 +26,25 @@ async function idbSet(key, value) {
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
     });
+    db.close();
   } catch {
-    /* IndexedDB may be blocked; localStorage remains the live copy. */
+    /* IndexedDB may be blocked (private mode); localStorage remains the live copy. */
+  }
+}
+
+/** Second copy (IndexedDB). Resolves to null when there is none. */
+export async function readBackup() {
+  try {
+    const db = await idb();
+    const value = await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get(STORE_KEY);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return value ? migrateDb(value) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -31,12 +53,13 @@ export function defaultPrefs() {
     cookie: { decided: false, storage: false, shownAt: null },
     age: { confirmed: false, over13: false, guardian: false },
     displayName: "",
+    myTeam: "",
     lang: null, // null = not chosen yet (shows language picker)
   };
 }
 
-// Language and chosen event are per-visit: kept in sessionStorage, so a reload keeps them
-// but opening the site again (new tab / reopened app) asks for language and event again.
+// Language and chosen event are per-visit (sessionStorage): a reload keeps them, a new visit asks
+// again. The last choices are remembered (lastLang / lastEvent) to offer one-click "continue".
 const SESSION_KEY = "vite-biobuzz-session-v1";
 
 function readSession() {
@@ -50,59 +73,108 @@ function readSession() {
 
 export function loadPrefs() {
   const session = readSession();
+  let stored = {};
   try {
     const x = JSON.parse(localStorage.getItem(PREFS_KEY));
     if (x && typeof x === "object") {
-      const { lang: _lang, event: _event, ...stored } = x; // never restore these from long-term storage
-      return {
-        ...defaultPrefs(),
-        ...stored,
-        cookie: { ...defaultPrefs().cookie, ...(stored.cookie || {}) },
-        age: { ...defaultPrefs().age, ...(stored.age || {}) },
-        lang: session.lang ?? null,
-        event: session.event,
-      };
+      const { lang: _lang, event: _event, ...rest } = x; // never restore these from long-term storage
+      stored = rest;
     }
   } catch {
     /* ignore */
   }
-  return { ...defaultPrefs(), lang: session.lang ?? null, event: session.event };
+  const d = defaultPrefs();
+  return {
+    ...d,
+    ...stored,
+    cookie: { ...d.cookie, ...(stored.cookie || {}) },
+    age: { ...d.age, ...(stored.age || {}) },
+    lang: session.lang ?? null,
+    event: session.event,
+  };
 }
 
 export function savePrefs(prefs) {
   const { lang, event, ...persistent } = prefs;
-  localStorage.setItem(PREFS_KEY, JSON.stringify(persistent));
+  const remember = { ...persistent, lastLang: lang || persistent.lastLang || null, lastEvent: event?.set ? event : persistent.lastEvent || null };
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(remember));
+  } catch {
+    /* storage blocked: prefs live for this tab only */
+  }
   try {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify({ lang, event }));
   } catch {
     /* ignore */
   }
+  return remember;
 }
 
+/** Returns { db, source } where source is "local" | "seed" | "corrupt". */
 export function loadDb(allowStorage) {
-  if (!allowStorage) return makeSeed();
+  if (!allowStorage) return { db: makeSeed(), source: "seed" };
+  let raw;
   try {
-    const x = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (x && Array.isArray(x.teams) && Array.isArray(x.records)) return x;
+    raw = localStorage.getItem(STORE_KEY);
   } catch {
-    /* ignore */
+    return { db: makeSeed(), source: "seed" };
   }
-  const seed = makeSeed();
-  localStorage.setItem(STORE_KEY, JSON.stringify(seed));
-  idbSet(STORE_KEY, seed);
-  return seed;
+  if (!raw) return { db: makeSeed(), source: "seed" };
+  try {
+    return { db: migrateDb(JSON.parse(raw)), source: "local" };
+  } catch {
+    // Keep the broken copy for manual recovery instead of overwriting it.
+    try {
+      localStorage.setItem(`${STORE_KEY}-corrupt-${Date.now()}`, raw);
+    } catch {
+      /* ignore */
+    }
+    return { db: makeSeed(), source: "corrupt" };
+  }
 }
 
+/** Writes both copies. Returns { ok, error? }. */
 export function persistDb(db, allowStorage) {
-  if (!allowStorage) return;
+  if (!allowStorage) return { ok: true, skipped: true };
   const next = { ...db, meta: { ...db.meta, updatedAt: new Date().toISOString() } };
-  localStorage.setItem(STORE_KEY, JSON.stringify(next));
   idbSet(STORE_KEY, next);
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(next));
+    return { ok: true, savedAt: next.meta.updatedAt };
+  } catch (error) {
+    return { ok: false, error: error?.name === "QuotaExceededError" ? "quota" : "blocked" };
+  }
+}
+
+/** Ask the browser not to evict our storage under pressure (no prompt in Chromium/Firefox). */
+export async function requestPersistence() {
+  try {
+    if (!navigator.storage?.persist) return null;
+    if (await navigator.storage.persisted()) return true;
+    return await navigator.storage.persist();
+  } catch {
+    return null;
+  }
+}
+
+export async function storageEstimate() {
+  try {
+    const e = await navigator.storage?.estimate?.();
+    const persisted = await navigator.storage?.persisted?.();
+    return e ? { usage: e.usage || 0, quota: e.quota || 0, persisted: Boolean(persisted) } : null;
+  } catch {
+    return null;
+  }
 }
 
 export function wipeAll() {
-  localStorage.removeItem(STORE_KEY);
-  localStorage.removeItem(PREFS_KEY);
+  for (const key of [STORE_KEY, PREFS_KEY]) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+  }
   try {
     sessionStorage.removeItem(SESSION_KEY);
   } catch {
@@ -115,79 +187,4 @@ export function wipeAll() {
   }
 }
 
-export const CSV_COLUMNS = [
-  "teamNumber",
-  "eventCode",
-  "eventName",
-  "matchNo",
-  "date",
-  "autoLeave",
-  "autoPark",
-  "autoHiveTips",
-  "teleopHiveTips",
-  "cellItems",
-  "flowerPlaced",
-  "ownedFlowerItems",
-  "bottomNectar",
-  "gardenItems",
-  "teleopPark",
-  "penalties",
-  "disabled",
-  "confidence",
-  "scout",
-  "notes",
-  "autoTrajectory",
-  "pollenCycleSec",
-  "nectarCycleSec",
-  "hiveSuccess",
-  "flowerAccuracy",
-];
-
-export function csvEsc(v) {
-  const s = String(v ?? "");
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-export function parseCSV(text) {
-  const out = [];
-  let row = [];
-  let field = "";
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quoted) {
-      if (c === '"' && text[i + 1] === '"') {
-        field += '"';
-        i += 1;
-      } else if (c === '"') quoted = false;
-      else field += c;
-    } else if (c === '"') quoted = true;
-    else if (c === ",") {
-      row.push(field);
-      field = "";
-    } else if (c === "\n") {
-      row.push(field.replace(/\r$/, ""));
-      field = "";
-      if (row.some((x) => x !== "")) out.push(row);
-      row = [];
-    } else field += c;
-  }
-  row.push(field.replace(/\r$/, ""));
-  if (row.some((x) => x !== "")) out.push(row);
-  if (!out.length) return [];
-  const keys = out.shift().map((x) => x.trim().replace(/^\ufeff/, ""));
-  return out.map((line) => Object.fromEntries(keys.map((k, i) => [k, (line[i] ?? "").trim()])));
-}
-
-export function bool(v) {
-  return ["1", "true", "yes", "да", "y"].includes(String(v || "").trim().toLowerCase());
-}
-
-export function download(name, text, type) {
-  const blob = new Blob([text], { type });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 800);
-}
+export { emptyDb };
