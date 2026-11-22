@@ -1,4 +1,4 @@
-import { tr } from "./i18n";
+import { getLang, tr } from "./i18n";
 import gameConfig from "../config/game.biobuzz";
 
 export const MODEL_VERSION = "BIOBUZZ TU05 · 15.10.2026";
@@ -89,7 +89,7 @@ export function makeSeed() {
     }
   });
   return {
-    version: 2,
+    version: 3,
     meta: {
       demo: true,
       eventName: "Демо-турнир · учебные данные",
@@ -100,6 +100,7 @@ export function makeSeed() {
     teams,
     records,
     draft: { captain: "D-101", picked: [], removed: [] },
+    schedule: null,
   };
 }
 
@@ -118,8 +119,16 @@ export function sd(a) {
   const m = avg(a);
   return Math.sqrt(avg(a.map((x) => (x - m) ** 2)));
 }
+/** Number for display: decimal comma in Russian, dot in English. */
 export function fmt(v, d = 1) {
-  return Number(v || 0).toFixed(d).replace(".", ",");
+  const s = Number(v || 0).toFixed(d);
+  return getLang() === "en" ? s : s.replace(".", ",");
+}
+
+/** Rounded number for machine-readable exports (CSV): always a dot. */
+export function round(v, d = 1) {
+  const k = 10 ** d;
+  return Math.round(Number(v || 0) * k) / k;
 }
 
 export function breakdown(r) {
@@ -138,7 +147,32 @@ export function rowsFor(db, id) {
 
 const PRIOR_N = 3; // pseudo-observations pulling thin samples toward the event average
 
+// ── Memoisation ──────────────────────────────────────────────────────────
+// db objects are replaced (never mutated) by the app, so results are cached per `db.records`
+// array. Entries also check the record count, which keeps in-place pushes (tests, scripts) safe.
+const priorCache = new WeakMap();
+const statsCache = new WeakMap();
+
+function cacheFor(map, records) {
+  let m = map.get(records);
+  if (!m) {
+    m = new Map();
+    map.set(records, m);
+  }
+  return m;
+}
+
 export function eventPrior(db) {
+  const m = cacheFor(priorCache, db.records);
+  const key = db.meta.eventCode || "";
+  const hit = m.get(key);
+  if (hit && hit.len === db.records.length) return hit.value;
+  const value = computePrior(db);
+  m.set(key, { len: db.records.length, value });
+  return value;
+}
+
+function computePrior(db) {
   const rs = db.records.filter((x) => !db.meta.eventCode || x.eventCode === db.meta.eventCode);
   const bs = rs.map(breakdown);
   const totals = bs.map((x) => x.total);
@@ -155,6 +189,16 @@ export function eventPrior(db) {
 
 export function stats(db, t) {
   if (!t) return null;
+  const m = cacheFor(statsCache, db.records);
+  const key = `${getLang()}|${db.meta.eventCode || ""}|${t.id}`;
+  const hit = m.get(key);
+  if (hit && hit.team === t && hit.len === db.records.length) return hit.value;
+  const value = computeStats(db, t);
+  m.set(key, { team: t, len: db.records.length, value });
+  return value;
+}
+
+function computeStats(db, t) {
   const prior = eventPrior(db);
   const rs = rowsFor(db, t.id);
   const bs = rs.map(breakdown);
@@ -277,7 +321,7 @@ export function pairModel(db, x, y) {
   const dataFactor = Math.min(1, (a.count + b.count) / 12);
   const stability = avg([a.consistency, b.consistency]);
   const collision = collisionCheck(a, b);
-  const { synergy, collision: colConfig } = gameConfig;
+  const { synergy } = gameConfig;
   const dnfPenalty = (a.dnf + b.dnf) * synergy.dnfPenaltyWeight;
   const score = clamp(
     cover * synergy.coverWeight +
@@ -465,4 +509,129 @@ export function initials(t) {
 
 export function teamLabel(t) {
   return t ? `${t.number} · ${t.name}` : tr("Команда не выбрана");
+}
+
+// ── Official results: OPR and match predictions ─────────────────────────
+// OPR (offensive power rating) = least-squares split of official alliance scores between the
+// robots that played. It needs no scouting at all, so it complements the scouting model and
+// lets us check the model against real results (calibration).
+
+/** Solve A·x = b (A square) with Gaussian elimination + partial pivoting. */
+function solve(A, b) {
+  const n = b.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]];
+    const d = M[c][c] || 1e-12;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r][c] / d;
+      if (!f) continue;
+      for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+    }
+  }
+  return M.map((row, i) => row[n] / (row[i] || 1e-12));
+}
+
+/**
+ * OPR from played qualification matches.
+ * @param {Array<{level:string, played:boolean, red:string[], blue:string[], redScoreNp:number, blueScoreNp:number}>} matches
+ * @returns {{opr: Map<string, number>, residualSd: number, matches: number}}
+ */
+export function computeOpr(matches) {
+  const played = (matches || []).filter((m) => m.played && m.level === "qual" && m.redScoreNp !== null && m.blueScoreNp !== null && m.red?.length && m.blue?.length);
+  const teams = [...new Set(played.flatMap((m) => [...m.red, ...m.blue]))];
+  const opr = new Map();
+  if (!played.length || !teams.length) return { opr, residualSd: 0, matches: 0 };
+  const idx = new Map(teams.map((t, i) => [t, i]));
+  const n = teams.length;
+  const AtA = Array.from({ length: n }, () => new Array(n).fill(0));
+  const Atb = new Array(n).fill(0);
+  const rows = [];
+  played.forEach((m) => {
+    rows.push([m.red, m.redScoreNp], [m.blue, m.blueScoreNp]);
+  });
+  rows.forEach(([alliance, score]) => {
+    const ids = alliance.map((t) => idx.get(t));
+    ids.forEach((i) => {
+      Atb[i] += score;
+      ids.forEach((j) => (AtA[i][j] += 1));
+    });
+  });
+  // Small ridge term keeps the system solvable early in an event (few matches per team).
+  const mean = rows.reduce((s, r) => s + r[1], 0) / rows.length / 2;
+  const lambda = 0.5;
+  for (let i = 0; i < n; i++) {
+    AtA[i][i] += lambda;
+    Atb[i] += lambda * mean;
+  }
+  const x = solve(AtA, Atb);
+  teams.forEach((t, i) => opr.set(t, x[i]));
+  const resid = rows.map(([alliance, score]) => score - alliance.reduce((s, t) => s + opr.get(t), 0));
+  const residualSd = Math.sqrt(resid.reduce((s, r) => s + r * r, 0) / Math.max(1, resid.length - 1));
+  return { opr, residualSd, matches: played.length };
+}
+
+/** Normal CDF, exported for UI probability displays. */
+export function normalCdf(z) {
+  return phi(z);
+}
+
+function allianceFromScouting(db, numbers) {
+  const byNumber = new Map(db.teams.map((t) => [t.number, t]));
+  let mean = 0;
+  let variance = 0;
+  let observed = 0;
+  numbers.forEach((n) => {
+    const s = stats(db, byNumber.get(n) || { id: n, number: n, name: "" });
+    mean += s.mean;
+    variance += s.sd ** 2 + s.se ** 2;
+    observed += s.count;
+  });
+  return { mean, sd: Math.sqrt(variance), observed };
+}
+
+/**
+ * Win probability for one match (red vs blue team numbers) from two independent sources:
+ * the scouting model and official OPR. Either may be null when there is no data.
+ */
+export function predictMatch(db, red, blue, oprResult) {
+  const out = { scouting: null, opr: null };
+  const r = allianceFromScouting(db, red);
+  const b = allianceFromScouting(db, blue);
+  if (r.observed + b.observed > 0) {
+    const sd = Math.sqrt(r.sd ** 2 + b.sd ** 2) || 1;
+    out.scouting = { red: r.mean, blue: b.mean, pRed: phi((r.mean - b.mean) / sd), observed: r.observed + b.observed };
+  }
+  if (oprResult?.matches && [...red, ...blue].every((t) => oprResult.opr.has(t))) {
+    const rs = red.reduce((s, t) => s + oprResult.opr.get(t), 0);
+    const bs = blue.reduce((s, t) => s + oprResult.opr.get(t), 0);
+    const sd = Math.max(5, oprResult.residualSd * Math.SQRT2);
+    out.opr = { red: rs, blue: bs, pRed: phi((rs - bs) / sd) };
+  }
+  return out;
+}
+
+/**
+ * Honest backtest of the scouting model on played qualification matches: each match is predicted
+ * only from scouting records of EARLIER matches (records without a match number are ignored).
+ * Brier score: 0 = perfect, 0.25 = coin flip.
+ */
+export function calibration(db, matches) {
+  const played = (matches || []).filter((m) => m.level === "qual" && m.played && m.redScore !== null && m.blueScore !== null && m.redScore !== m.blueScore);
+  let n = 0;
+  let correct = 0;
+  let brier = 0;
+  played.forEach((m) => {
+    const before = { ...db, records: db.records.filter((r) => r.matchNo && r.matchNo < m.number) };
+    const p = predictMatch(before, m.red, m.blue, null).scouting;
+    if (!p) return;
+    const redWon = m.redScore > m.blueScore ? 1 : 0;
+    n += 1;
+    brier += (p.pRed - redWon) ** 2;
+    if ((p.pRed >= 0.5 ? 1 : 0) === redWon) correct += 1;
+  });
+  return n ? { n, accuracy: correct / n, brier: brier / n } : null;
 }

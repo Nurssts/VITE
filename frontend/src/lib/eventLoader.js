@@ -1,38 +1,38 @@
-const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-
-async function getJson(url) {
-  const r = await fetch(BASE + url, { headers: { Accept: "application/json" } });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
-  return data;
-}
+import { api } from "./api";
+import { tr } from "./i18n";
 
 // Real team name = nameShort; nameFull is the school/sponsor string.
-function fromFirst(x) {
+export function fromFirst(x) {
   const number = String(x.teamNumber ?? x.displayTeamNumber ?? "").trim();
   return {
     number,
-    name: (x.nameShort || x.teamName || x.nameFull || "").trim() || `Команда ${number}`,
+    name: (x.nameShort || x.teamName || x.nameFull || "").trim() || `${tr("Команда")} ${number}`,
     region: [x.city, x.stateProv].filter(Boolean).join(", "),
   };
 }
 
-// Returns teams of the event. Tries the official FIRST API (needs key on the server),
-// falls back to FTCScout (no key).
-export async function loadEventTeams(year, code) {
-  const c = encodeURIComponent(code.trim());
+/**
+ * Teams of one event. Tries the official FIRST API (needs a key on the server),
+ * falls back to FTCScout (public). `season` = year the season starts (2026 = BIOBUZZ).
+ */
+export async function loadEventTeams(season, code) {
+  const c = String(code || "").trim();
   const errors = [];
-  try {
-    const d = await getJson(`/api/ftc/teams?season=${year}&event_code=${c}`);
-    const teams = (d.teams || []).map(fromFirst).filter((t) => t.number);
-    if (teams.length) return { source: "FIRST", teams };
-  } catch (e) {
-    errors.push(`FIRST: ${e.message}`);
+  // Ask FIRST only when the server has credentials (saves a failing request and ~1s).
+  const health = await api.health().catch(() => null);
+  if (health?.official_api_configured !== false) {
+    try {
+      const d = await api.firstTeams(season, c);
+      const teams = (d.teams || []).map(fromFirst).filter((t) => t.number);
+      if (teams.length) return { source: "FIRST", teams };
+    } catch (e) {
+      errors.push(`FIRST: ${e.message}`);
+    }
   }
   try {
-    const d = await getJson(`/api/ftcscout/event/${c}/teams?season=${year}`);
+    const d = await api.eventTeamsScout(season, c);
     const teams = (d.teams || []).filter((t) => t.number);
-    if (teams.length) return { source: "FTCScout", teams };
+    if (teams.length) return { source: "FTCScout", teams, name: d.name };
     errors.push("FTCScout: 0 teams");
   } catch (e) {
     errors.push(`FTCScout: ${e.message}`);
@@ -40,13 +40,13 @@ export async function loadEventTeams(year, code) {
   throw new Error(errors.join(" | "));
 }
 
-export function teamsToDb(list) {
+export function teamsToDb(list, source = "FTC Events API") {
   return list.map((t) => ({
-    id: t.number,
-    number: t.number,
-    name: t.name,
+    id: String(t.number),
+    number: String(t.number),
+    name: t.name || "",
     region: t.region || "",
-    style: "FTC Events API",
+    style: source,
     notes: "",
   }));
 }

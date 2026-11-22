@@ -1,6 +1,6 @@
-import { tr } from "../lib/i18n";
+import { getLang, tr } from "../lib/i18n";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
-import { Button, Panel } from "../components/ui";
+import { Button, PageHeader, Panel } from "../components/ui";
 import { allStats, MODEL_VERSION, pairModel } from "../lib/model";
 
 export default function Notebook({ db }) {
@@ -19,13 +19,11 @@ export default function Notebook({ db }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Engineering Notebook</h1>
-          <p className="mt-1 text-sm text-zinc-500">{tr("Одностраничный отчёт для Innovate / Inspire. Печать в системный PDF. Только ваши данные, без выдуманных метрик.")}</p>
-        </div>
-        <Button onClick={printPdf}>{tr("Печать / сохранить PDF")}</Button>
-      </div>
+      <PageHeader
+        title="Engineering Notebook"
+        subtitle={tr("Одностраничный отчёт для Innovate / Inspire. Печать в системный PDF. Только ваши данные, без выдуманных метрик.")}
+        actions={<Button onClick={printPdf}>{tr("Печать / сохранить PDF")}</Button>}
+      />
       <Panel id="notebook-sheet">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -35,16 +33,16 @@ export default function Notebook({ db }) {
               {db.meta.eventName || tr("Ивент не указан")} · {MODEL_VERSION}
             </p>
           </div>
-          <div className="text-right text-xs text-zinc-500">{new Date().toLocaleString("ru-RU")}</div>
+          <div className="text-right text-xs text-zinc-500">{new Date().toLocaleString(getLang() === "en" ? "en-GB" : "ru-RU")}</div>
         </div>
         {db.meta.demo ? <p className="mt-3 text-sm text-zinc-300">{tr("Источник: учебный набор (помечен). Не используйте как доказательство реальных матчей.")}</p> : <p className="mt-3 text-sm text-zinc-300">{tr("Источник: локальный скаутинг команды на этом устройстве.")}</p>}
         <div className="mt-4 h-48" role="img" aria-label={tr("График синергии вклада команд для судейского PDF")}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chart}>
               <CartesianGrid stroke="#27272a" vertical={false} />
-              <XAxis dataKey="name" stroke="#a1a1aa" fontSize={11} />
-              <YAxis stroke="#a1a1aa" fontSize={11} />
-              <Bar dataKey="mean" fill="#ffffff" name={tr("Модельный вклад")} />
+              <XAxis dataKey="name" stroke="#52525b" fontSize={11} tick={{ fill: "#a1a1aa" }} />
+              <YAxis stroke="#52525b" fontSize={11} tick={{ fill: "#a1a1aa" }} />
+              <Bar dataKey="mean" fill="#ffffff" radius={[3, 3, 0, 0]} isAnimationActive={false} name={tr("Модельный вклад")} />
             </BarChart>
           </ResponsiveContainer>
         </div>

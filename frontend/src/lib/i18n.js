@@ -178,6 +178,10 @@ import { EN } from "./en";
 let CURRENT_LANG = "ru";
 export function setLang(lang) {
   CURRENT_LANG = lang || "ru";
+  if (typeof document !== "undefined") document.documentElement.lang = CURRENT_LANG;
+}
+export function getLang() {
+  return CURRENT_LANG;
 }
 export function tr(text) {
   if (CURRENT_LANG !== "en") return text;

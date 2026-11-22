@@ -1,162 +1,182 @@
-import { tr } from "../lib/i18n";
 import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Button, DemoBanner, Panel } from "../components/ui";
+import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Sparkles } from "lucide-react";
+import { Button, DemoBanner, EmptyState, inputClass, PageHeader, Panel, SplitBar, Stat } from "../components/ui";
 import { fmt, MODEL_VERSION, pairModel, simulate, teamLabel } from "../lib/model";
+import { tr } from "../lib/i18n";
 
-export default function Analysis({ db }) {
-  const fallback = [...db.teams.map((t) => t.id), "", "", "", ""].slice(0, 4);
-  const [sel, setSel] = useState(fallback);
-  const [sim, setSim] = useState(null);
-  const one = useMemo(() => (sel[0] && sel[1] ? pairModel(db, sel[0], sel[1]) : null), [db, sel]);
-  const two = useMemo(() => (sel[2] && sel[3] ? pairModel(db, sel[2], sel[3]) : null), [db, sel]);
-  const hist = useMemo(() => {
-    if (!sim?.diff?.length) return [];
-    const bins = 18;
-    const min = Math.min(...sim.diff);
-    const max = Math.max(...sim.diff);
-    const span = Math.max(10, max - min);
-    const counts = Array(bins).fill(0);
-    sim.diff.forEach((v) => {
-      const i = Math.max(0, Math.min(bins - 1, Math.floor(((v - min) / span) * bins)));
-      counts[i] += 1;
-    });
-    return counts.map((c, i) => ({ bin: Math.round(min + (span / bins) * i), n: c }));
-  }, [sim]);
+const ITERATIONS = 2000;
 
-  function run() {
-    setSim(simulate(db, sel, 1200));
-  }
-
-  const TeamSelect = ({ index }) => (
-    <select className="w-full rounded-lg border border-zinc-800 bg-black px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400" value={sel[index]} onChange={(e) => setSel((s) => s.map((x, i) => (i === index ? e.target.value : x)))}>
-      {db.teams.map((t) => (
-        <option key={t.id} value={t.id}>
+function TeamSelect({ teams, value, onChange, taken, label }) {
+  return (
+    <select className={inputClass()} value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+      <option value="">{tr("Выберите команду")}</option>
+      {teams.map((t) => (
+        <option key={t.id} value={t.id} disabled={taken.includes(t.id) && t.id !== value}>
           {teamLabel(t)}
         </option>
       ))}
     </select>
   );
+}
+
+function bestPartner(db, captain, exclude) {
+  let best = null;
+  db.teams.forEach((t) => {
+    if (t.id === captain || exclude.includes(t.id)) return;
+    const m = pairModel(db, captain, t.id);
+    if (m && (!best || m.score > best.score)) best = { id: t.id, score: m.score };
+  });
+  return best?.id || "";
+}
+
+export default function Analysis({ db }) {
+  const ids = new Set(db.teams.map((t) => t.id));
+  const [raw, setRaw] = useState(() => db.teams.slice(0, 4).map((t) => t.id));
+  // Drop selections of teams that no longer exist (event switched, team deleted).
+  const sel = [0, 1, 2, 3].map((i) => (ids.has(raw[i]) ? raw[i] : ""));
+  const [sim, setSim] = useState(null);
+  const [simKey, setSimKey] = useState("");
+  const key = sel.join("|");
+  const current = sim && simKey === key ? sim : null;
+
+  const one = useMemo(() => (sel[0] && sel[1] ? pairModel(db, sel[0], sel[1]) : null), [db, sel[0], sel[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  const two = useMemo(() => (sel[2] && sel[3] ? pairModel(db, sel[2], sel[3]) : null), [db, sel[2], sel[3]]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hist = useMemo(() => {
+    if (!current?.diff?.length) return [];
+    const bins = 20;
+    const min = Math.min(...current.diff);
+    const max = Math.max(...current.diff);
+    const span = Math.max(10, max - min);
+    const counts = Array(bins).fill(0);
+    current.diff.forEach((v) => (counts[Math.max(0, Math.min(bins - 1, Math.floor(((v - min) / span) * bins)))] += 1));
+    return counts.map((c, i) => ({ bin: Math.round(min + (span / bins) * (i + 0.5)), n: c }));
+  }, [current]);
+
+  const setAt = (i, v) => setRaw((s) => [0, 1, 2, 3].map((k) => (k === i ? v : s[k] || "")));
+
+  if (db.teams.length < 4) {
+    return (
+      <div>
+        <PageHeader title={tr("Синергия и симулятор")} />
+        <EmptyState title={tr("Нужно минимум четыре команды.")} body={tr("Добавьте команды или выберите ивент.")} />
+      </div>
+    );
+  }
+
+  const ready = sel.every(Boolean) && new Set(sel).size === 4;
+
+  const AllianceBox = ({ title, a, b, pair }) => (
+    <Panel title={title}>
+      <div className="grid gap-2">
+        <TeamSelect teams={db.teams} value={sel[a]} onChange={(v) => setAt(a, v)} taken={sel} label={`${title} 1`} />
+        <TeamSelect teams={db.teams} value={sel[b]} onChange={(v) => setAt(b, v)} taken={sel} label={`${title} 2`} />
+        {sel[a] ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="justify-start"
+            onClick={() => setAt(b, bestPartner(db, sel[a], sel.filter((_, i) => i !== b)))}
+          >
+            <Sparkles size={14} aria-hidden="true" />
+            {tr("Подобрать лучшего партнёра")}
+          </Button>
+        ) : null}
+      </div>
+      {pair ? (
+        <div className="mt-4 border-t border-zinc-900 pt-4">
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs text-zinc-500">{tr("Индекс синергии")}</span>
+            <span className="num text-3xl font-semibold text-white">{Math.round(pair.score)}</span>
+          </div>
+          <p className="mt-2 text-xs text-zinc-400">
+            {pair.roles.join(" + ")} · {pair.complementaryRoles ? tr("комплиментарная пара") : tr("перекрытие ролей")}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Stat label={tr("Покрытие")} value={Math.round(pair.cover)} />
+            <Stat label={tr("Ожидаемо очков")} value={fmt(pair.mean, 0)} sub={`± ${fmt(pair.sd, 0)}`} />
+            <Stat label="Collision" value={`${Math.round(pair.collision.score)}`} sub={pair.collision.level} />
+            <Stat label="DNF" value={`${fmt(pair.dnfIndex * 100, 0)}%`} />
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-zinc-500">{pair.collision.reasons[0]}</p>
+        </div>
+      ) : null}
+    </Panel>
+  );
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">{tr("Синергия и симулятор")}</h1>
-        <p className="mt-1 text-sm text-zinc-500">{tr("Комплиментарность Hive + Flowers, collision check и 1200 итераций Монте-Карло.")}</p>
-      </div>
+      <PageHeader title={tr("Синергия и симулятор")} subtitle={tr("Комплиментарность Hive + Flowers, collision check и Монте-Карло с интервалом неопределённости.")} />
       <DemoBanner demo={db.meta.demo} />
-      {db.teams.length < 4 ? (
-        <Panel>{tr("Нужно минимум четыре команды.")}</Panel>
-      ) : (
-        <>
-          <div className="grid gap-3 lg:grid-cols-[1fr_220px_1fr]">
-            <Panel>
-              <div className="mb-2 text-xs uppercase tracking-wider text-zinc-500">{tr("Альянс 1")}</div>
-              <TeamSelect index={0} />
-              <div className="my-2 text-center text-zinc-600">+</div>
-              <TeamSelect index={1} />
-              {one ? (
-                <p className="mt-3 text-xs text-zinc-400">
-                  {tr("Роли")}: {one.roles.join(" + ")} · {one.complementaryRoles ? tr("комплиментарная пара") : tr("перекрытие ролей")}
-                </p>
-              ) : null}
-            </Panel>
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-zinc-900 shadow-sm">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{tr("Индекс синергии A1 / A2")}</div>
-              <div className="text-5xl font-semibold tracking-tight">
-                {one ? Math.round(one.score) : "—"}
-                <span className="text-2xl text-zinc-400"> / {two ? Math.round(two.score) : "—"}</span>
-              </div>
-              <p className="mt-2 text-center text-[11px] text-zinc-500">{tr("Сравнительная оценка из 100, не вероятность победы.")}</p>
-            </div>
-            <Panel>
-              <div className="mb-2 text-xs uppercase tracking-wider text-zinc-500">{tr("Альянс 2")}</div>
-              <TeamSelect index={2} />
-              <div className="my-2 text-center text-zinc-600">+</div>
-              <TeamSelect index={3} />
-            </Panel>
-          </div>
-          {one ? (
-            <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
-              {[
-                [tr("Покрытие"), Math.round(one.cover)],
-                [tr("Разница профилей"), Math.round(one.complement)],
-                ["Collision", `${one.collision.level} · ${Math.round(one.collision.score)}`],
-                ["DNF index", fmt(one.dnfIndex * 100, 0) + "%"],
-              ].map(([l, v]) => (
-                <div key={l} className="rounded-xl border border-zinc-800 p-3 text-sm">
-                  <div className="text-[11px] text-zinc-500">{l}</div>
-                  <div className="font-semibold">{v}</div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {AllianceBox({ title: tr("Альянс 1"), a: 0, b: 1, pair: one })}
+        {AllianceBox({ title: tr("Альянс 2"), a: 2, b: 3, pair: two })}
+      </div>
+
+      <Panel
+        className="mt-4"
+        title={`Monte-Carlo · ${MODEL_VERSION}`}
+        subtitle={tr("Нормальная модель по среднему и σ. Защита и решения судей не моделируются полностью.")}
+        actions={
+          <Button
+            disabled={!ready}
+            onClick={() => {
+              setSim(simulate(db, sel, ITERATIONS));
+              setSimKey(key);
+            }}
+          >
+            {tr("Запустить")} {ITERATIONS} {tr("симуляций")}
+          </Button>
+        }
+      >
+        {!ready ? <p className="text-sm text-zinc-500">{tr("Выберите четыре разные команды.")}</p> : null}
+        {ready && current ? (
+          <div>
+            <div className="mb-5 grid gap-6 sm:grid-cols-[auto_1fr] sm:items-center">
+              <div>
+                <div className="text-xs text-zinc-500">{tr("Победа A1")}</div>
+                <div className="num text-6xl font-semibold leading-none tracking-tight text-white">{fmt(current.winPct, 0)}%</div>
+                <div className="num mt-2 text-xs text-zinc-500">
+                  {tr("95% интервал P(A1)")}: {current.ciLow}–{current.ciHigh}%
                 </div>
+              </div>
+              <div>
+                <SplitBar p={current.winPct / 100 + current.tiePct / 200} leftLabel="A1" rightLabel="A2" />
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <Stat label={tr("Среднее A1")} value={fmt(current.mean1, 0)} />
+                  <Stat label={tr("Среднее A2")} value={fmt(current.mean2, 0)} />
+                  <Stat label={tr("Ничья")} value={`${current.tiePct}%`} />
+                </div>
+              </div>
+            </div>
+            <div className="h-44" role="img" aria-label={tr("Гистограмма разницы модельных очков")}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hist} margin={{ left: -16, right: 8 }}>
+                  <CartesianGrid stroke="#27272a" vertical={false} />
+                  <XAxis dataKey="bin" stroke="#52525b" fontSize={10} tick={{ fill: "#a1a1aa" }} />
+                  <YAxis stroke="#52525b" fontSize={10} tick={{ fill: "#a1a1aa" }} />
+                  <ReferenceLine x={hist.reduce((b, h) => (Math.abs(h.bin) < Math.abs(b) ? h.bin : b), Infinity)} stroke="#71717a" strokeDasharray="3 3" />
+                  <Tooltip contentStyle={{ background: "#09090b", border: "1px solid #27272a", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#fafafa" }} formatter={(v) => [v, tr("Итерации")]} />
+                  <Bar dataKey="n" fill="#ffffff" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">{tr("Ось X — разница очков A1 − A2. Правее пунктира — победы A1.")}</p>
+            <ul className="mt-4 space-y-2 text-sm text-zinc-300">
+              {current.risks.map((r) => (
+                <li key={r} className="rounded-lg border border-zinc-800 px-3 py-2.5">
+                  {r}
+                </li>
               ))}
-            </div>
-          ) : null}
-          {one?.collision?.reasons ? <p className="mt-3 text-sm text-zinc-400">{one.collision.reasons[0]}</p> : null}
-          <Panel className="mt-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold">Monte-Carlo · {MODEL_VERSION}</h2>
-                <p className="text-[11px] text-zinc-500">{tr("Нормальная модель по среднему и σ. Защита и решения судей не моделируются полностью.")}</p>
-              </div>
-              <Button onClick={run}>{tr("Запустить 1200 симуляций")}</Button>
-            </div>
-            {sim ? (
-              <div>
-                {[
-                  [tr("Победа A1"), sim.winPct, "bg-white"],
-                  [tr("Победа A2"), sim.lossPct, "bg-zinc-500"],
-                  [tr("Ничья"), sim.tiePct, "bg-zinc-700"],
-                ].map(([l, v, c]) => (
-                  <div key={l} className="mb-2 grid grid-cols-[90px_1fr_48px] items-center gap-2 text-xs">
-                    <span className="text-zinc-400">{l}</span>
-                    <div className="h-2 overflow-hidden rounded bg-zinc-800">
-                      <div className={`h-full ${c}`} style={{ width: `${v}%` }} />
-                    </div>
-                    <strong>{v}%</strong>
-                  </div>
-                ))}
-                <div className="mt-4 h-40" role="img" aria-label={tr("Гистограмма разницы модельных очков")}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={hist}>
-                      <CartesianGrid stroke="#27272a" vertical={false} />
-                      <XAxis dataKey="bin" stroke="#71717a" fontSize={10} />
-                      <YAxis stroke="#71717a" fontSize={10} />
-                      <Tooltip contentStyle={{ background: "#09090b", border: "1px solid #27272a" }} />
-                      <Bar dataKey="n" fill="#ffffff" name={tr("Итерации")} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <div className="text-[11px] text-zinc-500">{tr("Среднее A1")}</div>
-                    <strong>{fmt(sim.mean1, 0)}</strong>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-zinc-500">{tr("Среднее A2")}</div>
-                    <strong>{fmt(sim.mean2, 0)}</strong>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-zinc-500">{tr("95% интервал P(A1)")}</div>
-                    <strong>
-                      {sim.ciLow}–{sim.ciHigh}%
-                    </strong>
-                  </div>
-                </div>
-                <ul className="mt-4 space-y-2 text-sm text-zinc-300">
-                  {sim.risks.map((r) => (
-                    <li key={r} className="rounded-lg border border-zinc-800 p-3">
-                      {r}
-                    </li>
-                  ))}
-                </ul>
-                <p className="chart-note">{tr("Вероятность — доля итераций, не гарантия исхода матча.")}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-zinc-500">{tr("Запустите симуляцию. При малом числе матчей интервал будет широким.")}</p>
-            )}
-          </Panel>
-        </>
-      )}
+            </ul>
+            <p className="mt-3 text-xs text-zinc-500">{tr("Вероятность — доля итераций, не гарантия исхода матча.")}</p>
+          </div>
+        ) : ready ? (
+          <p className="text-sm text-zinc-500">{tr("Запустите симуляцию. При малом числе матчей интервал будет широким.")}</p>
+        ) : null}
+      </Panel>
     </div>
   );
 }

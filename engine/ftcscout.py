@@ -1,225 +1,219 @@
-"""FTCScout.org GraphQL API integration.
+"""FTCScout.org GraphQL client (public API, no authentication).
 
-Public API - no authentication required.
+One small httpx-based client replaces the previous gql/aiohttp stack:
+- a single shared AsyncClient (connection reuse, bounded timeouts),
+- a tiny in-process TTL cache so the event list and schedules are not refetched
+  by every visitor (Render free instances are slow to wake up),
+- errors are raised as FTCScoutError with a short, safe message.
 """
+from __future__ import annotations
 
-from typing import Any, List
-from gql import Client, gql
-from gql.transport.aiohttp import AIOHTTPTransport
-from httpx import Client as HTTPClient
-
-# GraphQL client
-GRAPHQL_URL = "https://api.ftcscout.org/graphql"
-_http_client = HTTPClient()
-_transport = AIOHTTPTransport(url=GRAPHQL_URL)
-_client = Client(transport=_transport)
-
-
-# GraphQL queries
-TEAMS_SEARCH_QUERY = gql("""
-query {
-  teamsSearch {
-    number
-    name
-  }
-}
-""")
-
-TEAM_BY_NUMBER_QUERY = gql("""
-query GetTeamByNumber($number: Int!) {
-  teamByNumber(number: $number) {
-    number
-    name
-    country
-    state
-    city
-    rookieYear
-  }
-}
-""")
-
-MATCH_RECORDS_QUERY = gql("""
-query GetMatchRecords($season: Int!, $teamNumber: Int!) {
-  matchRecords(season: $season, teamNumber: $teamNumber) {
-    allianceNumber
-    allianceColor
-    matchNumber
-    matchType
-    score
-    scorePenalty
-    scoreFinal
-    teams {
-      number
-      name
-    }
-  }
-}
-""")
-
-EVENTS_QUERY = gql("""
-query GetEvents($season: Int!) {
-  eventsOnDate(season: $season) {
-    code
-    name
-    start
-    end
-    location
-  }
-}
-""")
-
-TEP_RECORDS_QUERY = gql("""
-query GetTepRecords($season: Int!, $skip: Int, $take: Int) {
-  tepRecords(season: $season, skip: $skip, take: $take) {
-    teamNumber
-    teamName
-    epa
-    opr
-    dpr
-    ccwm
-  }
-}
-""")
-
-
-async def get_all_teams() -> List[dict[str, Any]]:
-    """Fetch all teams from FTCScout."""
-    try:
-        result = await _client.execute_async(TEAMS_SEARCH_QUERY)
-        return result.get("teamsSearch", [])
-    except Exception as e:
-        print(f"Error fetching teams: {e}")
-        return []
-
-
-async def get_team_by_number(number: int) -> dict[str, Any] | None:
-    """Fetch team details by number."""
-    try:
-        result = await _client.execute_async(TEAM_BY_NUMBER_QUERY, variable_values={"number": number})
-        return result.get("teamByNumber")
-    except Exception as e:
-        print(f"Error fetching team {number}: {e}")
-        return None
-
-
-async def get_match_records(season: int, team_number: int) -> dict[str, Any] | None:
-    """Fetch match records for a team."""
-    try:
-        result = await _client.execute_async(
-            MATCH_RECORDS_QUERY,
-            variable_values={"season": season, "teamNumber": team_number}
-        )
-        return result.get("matchRecords")
-    except Exception as e:
-        print(f"Error fetching match records: {e}")
-        return None
-
-
-async def get_events(season: int) -> List[dict[str, Any]]:
-    """Fetch events for a season."""
-    try:
-        result = await _client.execute_async(EVENTS_QUERY, variable_values={"season": season})
-        return result.get("eventsOnDate", [])
-    except Exception as e:
-        print(f"Error fetching events: {e}")
-        return []
-
-
-async def get_tep_records(season: int, skip: int = 0, take: int = 100) -> List[dict[str, Any]]:
-    """Fetch TEP records for ranking."""
-    try:
-        result = await _client.execute_async(
-            TEP_RECORDS_QUERY,
-            variable_values={"season": season, "skip": skip, "take": take}
-        )
-        return result.get("tepRecords", [])
-    except Exception as e:
-        print(f"Error fetching TEP records: {e}")
-        return []
-
+import asyncio
+import logging
+import time
+from typing import Any
 
 import httpx
 
-_EVENT_TEAMS_FULL = """
-query EventTeams($season: Int!, $code: String!) {
-  eventByCode(season: $season, code: $code) {
-    name
-    teams { teamNumber team { name location { city state } } }
-  }
-}
-"""
-_EVENT_TEAMS_MIN = """
-query EventTeams($season: Int!, $code: String!) {
-  eventByCode(season: $season, code: $code) {
-    name
-    teams { teamNumber team { name } }
-  }
-}
-"""
+log = logging.getLogger("vite.ftcscout")
+
+GRAPHQL_URL = "https://api.ftcscout.org/graphql"
+_TIMEOUT = httpx.Timeout(20.0, connect=6.0)
+_HEADERS = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "VITE-BioBuzz-Alliance-Matrix"}
+
+_client: httpx.AsyncClient | None = None
+_cache: dict[str, tuple[float, Any]] = {}
+_locks: dict[str, asyncio.Lock] = {}
 
 
-async def get_event_teams(season: int, code: str) -> dict[str, Any]:
-    """Teams registered at one event, via FTCScout (public, no key). Plain httpx, no gql."""
-    last_error = "unknown error"
-    for query in (_EVENT_TEAMS_FULL, _EVENT_TEAMS_MIN):
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(GRAPHQL_URL, json={"query": query, "variables": {"season": season, "code": code}})
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-        if body.get("errors"):
-            last_error = body["errors"][0].get("message", last_error)
-            continue
-        event = (body.get("data") or {}).get("eventByCode")
-        if not event:
-            return {"name": "", "teams": []}
-        teams = []
-        for row in event.get("teams") or []:
-            team = row.get("team") or {}
-            loc = team.get("location") or {}
-            teams.append({
-                "number": str(row.get("teamNumber")),
-                "name": team.get("name") or "",
-                "region": ", ".join(x for x in (loc.get("city"), loc.get("state")) if x),
-            })
-        return {"name": event.get("name") or "", "teams": teams}
-    raise RuntimeError(last_error)
+class FTCScoutError(RuntimeError):
+    """FTCScout could not be reached or rejected the query."""
 
 
-_EVENT_FIELDS = [
-    "code name start end location { city state country }",
-    "code name start end",
-    "code name",
-]
+def _http() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS)
+    return _client
 
 
-async def _gql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.post(GRAPHQL_URL, json={"query": query, "variables": variables})
+async def close() -> None:
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+
+
+def clear_cache() -> None:
+    _cache.clear()
+
+
+async def gql(query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Run one GraphQL query and return its `data` object."""
     try:
-        body = r.json()
-    except Exception:
-        raise RuntimeError(f"HTTP {r.status_code}: not JSON")
+        response = await _http().post(GRAPHQL_URL, json={"query": query, "variables": variables or {}})
+    except httpx.TimeoutException as exc:
+        raise FTCScoutError("FTCScout request timed out") from exc
+    except httpx.HTTPError as exc:
+        raise FTCScoutError("Could not reach FTCScout") from exc
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise FTCScoutError(f"FTCScout returned HTTP {response.status_code} (not JSON)") from exc
     if body.get("errors"):
-        raise RuntimeError(body["errors"][0].get("message", "GraphQL error"))
+        raise FTCScoutError(str(body["errors"][0].get("message", "GraphQL error"))[:200])
+    if response.status_code >= 400:
+        raise FTCScoutError(f"FTCScout returned HTTP {response.status_code}")
     return body.get("data") or {}
 
 
-async def list_events(season: int) -> dict[str, Any]:
-    """All events of a season. Tries several query shapes; reports the real error if all fail."""
-    errors: list[str] = []
-    for fields in _EVENT_FIELDS:
-        for root, args in (
-            ("eventsSearch", "(season: $season, limit: 1000)"),
-            ("eventsSearch", "(season: $season)"),
-        ):
-            query = f"query($season: Int!) {{ {root}{args} {{ {fields} }} }}"
-            try:
-                data = await _gql(query, {"season": season})
-                events = data.get(root) or []
-                for e in events:
-                    loc = e.get("location")
-                    if isinstance(loc, dict):
-                        e["location"] = ", ".join(x for x in (loc.get("city"), loc.get("state"), loc.get("country")) if x)
-                return {"events": events, "error": None}
-            except Exception as exc:  # noqa: BLE001
-                errors.append(str(exc))
-    return {"events": [], "error": " | ".join(dict.fromkeys(errors))[:400]}
+async def cached(key: str, ttl: float, loader) -> Any:
+    """Return a cached value or load it once (concurrent callers share one request)."""
+    hit = _cache.get(key)
+    if hit and hit[0] > time.monotonic():
+        return hit[1]
+    lock = _locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        hit = _cache.get(key)
+        if hit and hit[0] > time.monotonic():
+            return hit[1]
+        value = await loader()
+        _cache[key] = (time.monotonic() + ttl, value)
+        return value
+
+
+def _loc_text(loc: Any) -> str:
+    if isinstance(loc, dict):
+        return ", ".join(x for x in (loc.get("city"), loc.get("state"), loc.get("country")) if x)
+    return loc or ""
+
+
+# ── Teams ────────────────────────────────────────────────────────────────
+
+async def search_teams(query: str = "", limit: int = 50) -> list[dict[str, Any]]:
+    data = await gql(
+        "query($q: String, $limit: Int) { teamsSearch(searchText: $q, limit: $limit) { number name location { city state country } } }",
+        {"q": query or None, "limit": limit},
+    )
+    rows = data.get("teamsSearch") or []
+    return [{"number": t["number"], "name": t.get("name") or "", "region": _loc_text(t.get("location"))} for t in rows[:limit]]
+
+
+async def get_team_by_number(number: int) -> dict[str, Any] | None:
+    data = await gql(
+        "query($n: Int!) { teamByNumber(number: $n) { number name rookieYear location { city state country } } }",
+        {"n": number},
+    )
+    team = data.get("teamByNumber")
+    if not team:
+        return None
+    return {"number": team["number"], "name": team.get("name") or "", "rookieYear": team.get("rookieYear"), "region": _loc_text(team.get("location"))}
+
+
+# ── Events ───────────────────────────────────────────────────────────────
+
+async def list_events(season: int) -> list[dict[str, Any]]:
+    async def load() -> list[dict[str, Any]]:
+        data = await gql(
+            "query($s: Int!) { eventsSearch(season: $s, limit: 2000) { code name start end location { city state country } } }",
+            {"s": season},
+        )
+        events = data.get("eventsSearch") or []
+        for e in events:
+            e["location"] = _loc_text(e.get("location"))
+        return events
+
+    return await cached(f"events:{season}", 15 * 60, load)
+
+
+async def get_event_teams(season: int, code: str) -> dict[str, Any]:
+    async def load() -> dict[str, Any]:
+        data = await gql(
+            "query($s: Int!, $c: String!) { eventByCode(season: $s, code: $c) { name teams { teamNumber team { name location { city state } } } } }",
+            {"s": season, "c": code},
+        )
+        event = data.get("eventByCode")
+        if not event:
+            return {"name": "", "teams": []}
+        teams = [
+            {
+                "number": str(row.get("teamNumber")),
+                "name": (row.get("team") or {}).get("name") or "",
+                "region": _loc_text((row.get("team") or {}).get("location")),
+            }
+            for row in event.get("teams") or []
+        ]
+        return {"name": event.get("name") or "", "teams": teams}
+
+    return await cached(f"teams:{season}:{code}", 5 * 60, load)
+
+
+_LEVELS = {"Quals": "qual", "Playoff": "playoff", "DoubleElim": "playoff", "Finals": "playoff", "Semis": "playoff"}
+
+
+def _score_fragment(season: int) -> str:
+    # The score union member is season specific (MatchScores2026 = BIOBUZZ).
+    return f"scores {{ ... on MatchScores{season} {{ red {{ totalPoints totalPointsNp }} blue {{ totalPoints totalPointsNp }} }} }}"
+
+
+async def get_event_matches(season: int, code: str) -> dict[str, Any]:
+    """Official schedule and results of one event, normalised for the frontend."""
+
+    async def load() -> dict[str, Any]:
+        base = "matchNum tournamentLevel series hasBeenPlayed scheduledStartTime teams { teamNumber alliance station }"
+        query = "query($s: Int!, $c: String!) {{ eventByCode(season: $s, code: $c) {{ name matches {{ {fields} }} }} }}"
+        try:
+            data = await gql(query.format(fields=f"{base} {_score_fragment(season)}"), {"s": season, "c": code})
+        except FTCScoutError:
+            # Unknown score type for this season: still return the schedule.
+            data = await gql(query.format(fields=base), {"s": season, "c": code})
+        event = data.get("eventByCode")
+        if not event:
+            return {"name": "", "matches": []}
+        matches = []
+        for m in event.get("matches") or []:
+            red = sorted((t for t in m.get("teams") or [] if t.get("alliance") == "Red"), key=lambda t: t.get("station") or "")
+            blue = sorted((t for t in m.get("teams") or [] if t.get("alliance") == "Blue"), key=lambda t: t.get("station") or "")
+            scores = m.get("scores") or {}
+            played = bool(m.get("hasBeenPlayed")) and bool(scores.get("red"))
+            matches.append({
+                "level": _LEVELS.get(m.get("tournamentLevel"), "other"),
+                "number": m.get("matchNum"),
+                "series": m.get("series") or 0,
+                "time": m.get("scheduledStartTime"),
+                "played": played,
+                "red": [str(t["teamNumber"]) for t in red],
+                "blue": [str(t["teamNumber"]) for t in blue],
+                "redScore": (scores.get("red") or {}).get("totalPoints") if played else None,
+                "blueScore": (scores.get("blue") or {}).get("totalPoints") if played else None,
+                "redScoreNp": (scores.get("red") or {}).get("totalPointsNp") if played else None,
+                "blueScoreNp": (scores.get("blue") or {}).get("totalPointsNp") if played else None,
+            })
+        matches.sort(key=lambda x: (x["level"] != "qual", x["series"], x["number"] or 0))
+        return {"name": event.get("name") or "", "matches": matches}
+
+    # Short TTL: results change during a live event.
+    return await cached(f"matches:{season}:{code}", 60, load)
+
+
+# ── Rankings (TEP records) ──────────────────────────────────────────────
+
+async def get_tep_records(season: int, skip: int = 0, take: int = 50) -> dict[str, Any]:
+    stats = f"stats {{ ... on TeamEventStats{season} {{ rank opr {{ totalPointsNp }} }} }}"
+    data = await gql(
+        f"query($s: Int!, $skip: Int!, $take: Int!) {{ tepRecords(season: $s, skip: $skip, take: $take) {{ count data {{ data {{ teamNumber eventCode team {{ name }} {stats} }} }} }} }}",
+        {"s": season, "skip": skip, "take": take},
+    )
+    rec = data.get("tepRecords") or {}
+    rows = []
+    for row in rec.get("data") or []:
+        p = row.get("data") or {}
+        st = p.get("stats") or {}
+        rows.append({
+            "teamNumber": p.get("teamNumber"),
+            "teamName": (p.get("team") or {}).get("name") or "",
+            "eventCode": p.get("eventCode"),
+            "rank": st.get("rank"),
+            "opr": (st.get("opr") or {}).get("totalPointsNp"),
+        })
+    return {"count": rec.get("count") or 0, "rankings": rows}

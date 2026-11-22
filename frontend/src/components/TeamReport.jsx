@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import { tr } from "../lib/i18n";
+import { useEscape } from "./useEscape";
 import { fmt, pairModel, roleLabel, stats, teamLabel } from "../lib/model";
 
 // Printable one-page scouting report. Optional partner team adds an alliance section
 // (synergy, role fit, collision risk) using the existing pairModel from the Analysis page.
 export default function TeamReport({ db, teamId, onClose }) {
+  useEscape(onClose);
   const t = db.teams.find((x) => x.id === teamId);
   const s = stats(db, t);
   const [partnerId, setPartnerId] = useState("");
@@ -39,7 +41,7 @@ export default function TeamReport({ db, teamId, onClose }) {
     <div className="fixed inset-0 z-[120] overflow-auto bg-white text-black">
       <style>{`@media print { .no-print { display: none !important; } body * { visibility: hidden; } .report-root, .report-root * { visibility: visible; } .report-root { position: absolute; inset: 0; } }`}</style>
       <div className="no-print sticky top-0 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white p-3">
-        <button className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm" onClick={onClose}>
+        <button type="button" className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm" onClick={onClose}>
           {tr("← Назад")}
         </button>
         <div className="flex items-center gap-2">
@@ -72,7 +74,7 @@ export default function TeamReport({ db, teamId, onClose }) {
               ))}
             </div>
           ) : null}
-          <button className="rounded-lg bg-black px-3 py-1.5 text-sm text-white" onClick={() => window.print()}>
+          <button type="button" className="rounded-lg bg-black px-3 py-1.5 text-sm text-white" onClick={() => window.print()}>
             {tr("Печать / PDF")}
           </button>
         </div>

@@ -1,18 +1,20 @@
 import { tr } from "../lib/i18n";
+import { useEscape } from "./useEscape";
 import { fmt, priority, roleLabel } from "../lib/model";
 import { rankedStats } from "../lib/exportCsv";
 
 // Printable ranking sheet of all teams (one table, black & white).
 export default function RankingReport({ db, onClose }) {
+  useEscape(onClose);
   const list = rankedStats(db);
   return (
     <div className="fixed inset-0 z-[120] overflow-auto bg-white text-black">
       <style>{`@media print { .no-print { display: none !important; } body * { visibility: hidden; } .report-root, .report-root * { visibility: visible; } .report-root { position: absolute; inset: 0; } tr { break-inside: avoid; } }`}</style>
       <div className="no-print sticky top-0 flex items-center justify-between border-b border-zinc-200 bg-white p-3">
-        <button className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm" onClick={onClose}>
+        <button type="button" className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm" onClick={onClose}>
           {tr("← Назад")}
         </button>
-        <button className="rounded-lg bg-black px-3 py-1.5 text-sm text-white" onClick={() => window.print()}>
+        <button type="button" className="rounded-lg bg-black px-3 py-1.5 text-sm text-white" onClick={() => window.print()}>
           {tr("Печать / PDF")}
         </button>
       </div>

@@ -1,3 +1,4 @@
+import { EN_UI } from "./en-ui";
 // English translations for UI strings that are written in Russian in the source.
 // Key = the exact Russian string. Missing keys simply stay in Russian.
 export const EN = {
@@ -288,3 +289,5 @@ export const EN = {
   "Текущий": "Current",
   "Сейчас": "Now",
 };
+
+Object.assign(EN, EN_UI);

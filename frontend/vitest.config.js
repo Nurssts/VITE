@@ -1,13 +1,10 @@
 import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  plugins: [react()],
   test: {
-    environment: "node",
-    include: ["src/lib/**/*.test.js"],
-    transformMode: {
-      web: [/\.[jt]sx?$/],
-      ssr: [/\.([cm]?js|ts)$/],
-    },
-    plugins: [],
+    environment: "node", // component tests opt into jsdom with a file comment
+    include: ["src/**/*.test.{js,jsx}"],
   },
 });

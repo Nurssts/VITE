@@ -4,44 +4,53 @@
 
 :root {
   color-scheme: dark;
+  font-feature-settings: "cv11", "ss01"; /* Inter: straight-sided digits, open shapes */
 }
 
 html,
 body,
 #root {
   min-height: 100%;
-  background: #09090b; /* zinc-950 */
+  background: #000;
   color: #fafafa;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Scrollbar – dark theme */
+/* Every metric uses tabular figures so columns of numbers line up. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: #fff;
+  color: #000;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #27272a;
   border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  border: 2px solid #000;
 }
 
 *:focus-visible {
   outline: 2px solid #fff;
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .skip-link {
   position: absolute;
   left: 12px;
-  top: -40px;
-  z-index: 80;
+  top: -48px;
+  z-index: 200;
   background: #fff;
   color: #000;
   padding: 8px 12px;
@@ -53,17 +62,20 @@ body,
   top: 12px;
 }
 
-.chart-note {
-  @apply mt-2 text-[11px] leading-relaxed text-zinc-600;
+/* Blue alliance / "other side" pattern: distinguishable without colour, also in print. */
+.hatch {
+  background: repeating-linear-gradient(135deg, #3f3f46 0 3px, #18181b 3px 6px);
 }
 
-/* Recharts dark tweaks */
-.recharts-cartesian-grid-horizontal line,
-.recharts-cartesian-grid-vertical line {
-  stroke: #27272a;
+/* Honeycomb backdrop for the start screens — the one decorative motif, taken from the BIOBUZZ hive. */
+.hive-grid {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 0 56 16v32L28 64 0 48V16z M28 64 56 80v32 M0 80l28-16' fill='none' stroke='%2327272a' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 56px 97px;
+  mask-image: radial-gradient(ellipse at 30% 40%, #000 0%, transparent 70%);
 }
-.recharts-text {
-  fill: #71717a;
+
+.chart-note {
+  @apply mt-2 text-xs leading-relaxed text-zinc-500;
 }
 
 .print-root {
@@ -88,31 +100,32 @@ body,
   }
 }
 
-/* Animations */
-@keyframes fade-in {
+/* Motion only answers an action: a dialog opening, a toast arriving. */
+@keyframes modal-in {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 1;
+    transform: translateY(8px) scale(0.98);
   }
 }
-
-@keyframes slide-up {
+@keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+    transform: translateY(-6px);
   }
 }
-
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out;
+.modal-in {
+  animation: modal-in 160ms ease-out;
+}
+.toast-in {
+  animation: toast-in 180ms ease-out;
 }
 
-.animate-slide-up {
-  animation: slide-up 0.6s ease-out;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
