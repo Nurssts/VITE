@@ -1,4 +1,5 @@
 import { EN_UI } from "./en-ui";
+import { EN_AI } from "./en-ai";
 // English translations for UI strings that are written in Russian in the source.
 // Key = the exact Russian string. Missing keys simply stay in Russian.
 export const EN = {
@@ -290,4 +291,4 @@ export const EN = {
   "Сейчас": "Now",
 };
 
-Object.assign(EN, EN_UI);
+Object.assign(EN, EN_UI, EN_AI);

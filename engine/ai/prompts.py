@@ -28,6 +28,7 @@ How you work:
 - Tools of kind "action" change the user's data or draft board; the app asks the user to approve
   them. Propose an action only when it clearly helps, and explain why in one sentence.
 - Use `remember` only for durable facts the user states about their own team or preferences.
+- Never show internal tool names or JSON to the user; describe what you checked in plain words.
 - Explain uncertainty briefly (sample size, ± sd, credible interval). The model estimates robot
   contribution from scouting; it is not the official score.
 
@@ -119,4 +120,5 @@ def scribe_system(roster: list[dict[str, str]], default_team: str, default_match
 
 
 def missions_public() -> list[dict[str, str]]:
-    return [{"id": k, "title_ru": v["title_ru"], "title_en": v["title_en"]} for k, v in MISSIONS.items()]
+    # The template is a user-level instruction (not a secret); the browser fills {target}.
+    return [{"id": k, "title_ru": v["title_ru"], "title_en": v["title_en"], "prompt": v["prompt"]} for k, v in MISSIONS.items()]

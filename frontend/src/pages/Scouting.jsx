@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Sparkles, Trash2 } from "lucide-react";
+import Dictation from "../components/Dictation";
 import { Badge, Button, Check, DemoBanner, EmptyState, Field, IconButton, inputClass, PageHeader, Panel, Segmented, Stepper, td, th } from "../components/ui";
 import { confirmDialog, toast } from "../components/feedback";
 import { addRecord, deleteRecord, findDuplicate, updateRecord } from "../lib/db";
@@ -33,6 +34,8 @@ export default function Scouting({ db, setDb, go, route }) {
   const schedule = db.schedule?.eventCode === db.meta.eventCode ? db.schedule : null;
   const byNumber = useMemo(() => new Map(db.teams.map((t) => [t.number, t])), [db.teams]);
   const [station, setStation] = useState(() => sessionStorage.getItem(STATION_KEY) || "");
+  const [dictating, setDictating] = useState(false);
+  const [aiNote, setAiNote] = useState(null);
   const [consent, setConsent] = useState(() => sessionStorage.getItem("vite-scout-consent") === "1");
   const [form, setForm] = useState(() => initialForm());
 
@@ -99,6 +102,7 @@ export default function Scouting({ db, setDb, go, route }) {
     const next = form.matchNo ? String(Number(form.matchNo) + 1) : "";
     const nextTeam = byNumber.get(teamForStation(schedule, next, station))?.id;
     setForm((f) => ({ ...blank, teamId: nextTeam || f.teamId, matchNo: next, eventCode: f.eventCode, date: f.date, confidence: f.confidence, scout: f.scout }));
+    setAiNote(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -138,13 +142,44 @@ export default function Scouting({ db, setDb, go, route }) {
               {tr("Отмена")}
             </Button>
           ) : (
-            <Button variant="secondary" onClick={() => go("data")}>
-              {tr("Импорт CSV")}
-            </Button>
+            <>
+              <Button variant="secondary" onClick={() => go("data")}>
+                {tr("Импорт CSV")}
+              </Button>
+              <Button onClick={() => setDictating(true)}>
+                <Sparkles size={15} aria-hidden="true" />
+                {tr("AI-диктовка")}
+              </Button>
+            </>
           )
         }
       />
       <DemoBanner demo={db.meta.demo} />
+      <Dictation
+        open={dictating}
+        onClose={() => setDictating(false)}
+        teams={db.teams}
+        form={form}
+        onApply={(res) => {
+          setForm(res.form);
+          setAiNote(res);
+        }}
+      />
+      {aiNote ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-300" role="status">
+          <Sparkles size={15} aria-hidden="true" />
+          <span>{tr("AI заполнил форму — проверьте перед сохранением.")}</span>
+          {aiNote.unknownTeam ? <Badge tone="strong">{tr("Команды нет в списке")}: {aiNote.unknownTeam}</Badge> : null}
+          {aiNote.uncertain.length ? (
+            <span className="text-zinc-400">
+              {tr("Не уверен")}: {aiNote.uncertain.join(", ")}
+            </span>
+          ) : null}
+          <button type="button" className="ml-auto text-xs text-zinc-500 hover:text-white" onClick={() => setAiNote(null)}>
+            {tr("Скрыть")}
+          </button>
+        </div>
+      ) : null}
 
       <form onSubmit={submit} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <Panel>

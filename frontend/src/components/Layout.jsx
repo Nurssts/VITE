@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, CalendarClock, ClipboardList, FileText, Gavel, LayoutDashboard, Menu, Plus, Settings, Upload, Users, X } from "lucide-react";
+import { BarChart3, CalendarClock, Sparkles, ClipboardList, FileText, Gavel, LayoutDashboard, Menu, Plus, Settings, Upload, Users, X } from "lucide-react";
 import { Button, IconButton } from "./ui";
 import { Logo } from "../app/Onboarding";
 import { t, tr } from "../lib/i18n";
@@ -7,6 +7,7 @@ import { t, tr } from "../lib/i18n";
 // Order = keyboard shortcuts 1–9.
 const NAV = [
   { id: "overview", icon: LayoutDashboard, group: "work" },
+  { id: "ai", icon: Sparkles, group: "work" },
   { id: "scouting", icon: ClipboardList, group: "work" },
   { id: "matches", icon: CalendarClock, group: "work" },
   { id: "teams", icon: Users, group: "work" },
@@ -16,9 +17,10 @@ const NAV = [
   { id: "data", icon: Upload, group: "data" },
   { id: "settings", icon: Settings, group: "data" },
 ];
-const MOBILE = ["overview", "scouting", "matches", "teams"];
+const MOBILE = ["overview", "scouting", "ai", "matches"];
 
 function label(lang, id) {
+  if (id === "ai") return "Strategist";
   return id === "matches" ? tr("Матчи") : t(lang, `nav_${id}`);
 }
 
@@ -73,7 +75,7 @@ function Sidebar({ lang, page, go, event, onEvent, onClose }) {
               >
                 <Icon size={16} aria-hidden="true" className={active ? "text-black" : "text-zinc-500 group-hover:text-zinc-300"} />
                 <span className="flex-1">{label(lang, item.id)}</span>
-                <kbd className={`hidden text-[10px] lg:inline ${active ? "text-zinc-500" : "text-zinc-700"}`}>{i + 1}</kbd>
+                {i < 9 ? <kbd className={`hidden text-[10px] lg:inline ${active ? "text-zinc-500" : "text-zinc-700"}`}>{i + 1}</kbd> : null}
               </button>
             </div>
           );

@@ -54,6 +54,8 @@ export function defaultPrefs() {
     age: { confirmed: false, over13: false, guardian: false },
     displayName: "",
     myTeam: "",
+    aiConsent: false, // explicit opt-in before anything is sent to an AI provider
+    aiShareNotes: true,
     lang: null, // null = not chosen yet (shows language picker)
   };
 }

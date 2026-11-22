@@ -106,7 +106,7 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "remember",
         "kind": "assist",
-        "description": "Save a durable fact about the user's team or preferences to VITE memory (e.g. 'Our robot is weak at FLOWER; we prefer HIVE partners'). The user can see and delete memories.",
+        "description": "Save a durable fact the user stated about their own team or preferences to VITE memory. Store exactly what the user said, in the user's language, without adding anything. The user can see and delete memories.",
         "parameters": _obj({"fact": {"type": "string", "maxLength": 300}}, ["fact"]),
     },
     {

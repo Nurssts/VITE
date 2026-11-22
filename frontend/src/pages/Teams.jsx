@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { ArrowLeft, Search, Users } from "lucide-react";
+import { ArrowLeft, Search, Sparkles, Users } from "lucide-react";
 import { Badge, Button, DemoBanner, EmptyState, Field, inputClass, Modal, PageHeader, Panel, PageSkeleton, ProfileBars, Stat, td, th } from "../components/ui";
 import { confirmDialog, toast } from "../components/feedback";
 import { addTeam, deleteTeam, updateTeam } from "../lib/db";
@@ -102,6 +102,10 @@ function Profile({ db, setDb, team, go }) {
           <>
             <Button variant="secondary" onClick={() => setReport(true)}>
               {tr("Печатный отчёт")}
+            </Button>
+            <Button variant="secondary" onClick={() => go("ai", "", { mission: "team", target: team.number })}>
+              <Sparkles size={15} aria-hidden="true" />
+              {tr("AI-разбор")}
             </Button>
             <Button onClick={() => go("scouting", "", { team: team.id })}>{tr("+ Матч")}</Button>
           </>

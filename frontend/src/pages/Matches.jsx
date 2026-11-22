@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, Loader2, RefreshCw } from "lucide-react";
-import { Badge, Button, EmptyState, inputClass, PageHeader, Panel, Segmented, SplitBar, Stat } from "../components/ui";
+import { CalendarClock, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Badge, Button, EmptyState, IconButton, inputClass, PageHeader, Panel, Segmented, SplitBar, Stat } from "../components/ui";
 import { toast } from "../components/feedback";
 import { api } from "../lib/api";
 import { applySchedule } from "../lib/db";
@@ -195,9 +195,14 @@ export default function Matches({ db, setDb, go, prefs, setPrefs }) {
                         )}
                       </div>
                       {!m.played && m.level === "qual" ? (
-                        <Button size="sm" variant="secondary" onClick={() => go("scouting", "", { match: m.number })}>
-                          {tr("Скаут")}
-                        </Button>
+                        <>
+                          <IconButton label={tr("AI-брифинг матча")} className="border border-zinc-800" onClick={() => go("ai", "", { mission: "prematch", target: String(m.number) })}>
+                            <Sparkles size={14} aria-hidden="true" />
+                          </IconButton>
+                          <Button size="sm" variant="secondary" onClick={() => go("scouting", "", { match: m.number })}>
+                            {tr("Скаут")}
+                          </Button>
+                        </>
                       ) : null}
                     </div>
                   </li>
