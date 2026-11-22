@@ -1,7 +1,7 @@
 """VITE · BioBuzz Alliance Matrix — API proxy + static frontend.
 
 The backend only proxies public data sources (FIRST Events API, The Orange Alliance,
-FTCScout) and the optional Gemini AI. All scouting math runs in the browser
+FTCScout) and the model providers of the VITE AI Strategist. All scouting math runs in the browser
 (frontend/src/lib/model.js). Credentials stay in the process environment and are never
 returned to the browser.
 
@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parent
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 FIRST_API = "https://ftc-api.firstinspires.org/v2.0"
 TOA_API = "https://theorangealliance.org/api"
-VERSION = "2.1.0"
+VERSION = "3.0.0"
 MODEL_VERSION = "BIOBUZZ TU05 · 15.10.2026"
 DEFAULT_SEASON = 2026  # BIOBUZZ 2026-2027
 _TIMEOUT = httpx.Timeout(12.0, connect=5.0)
@@ -195,7 +195,15 @@ async def toa_get(path: str) -> Any:
 
 def ai_is_enabled() -> bool:
     """AI features are on by default; set AI_ENABLED=false to turn them off."""
-    return os.getenv("AI_ENABLED", "true").strip().lower() != "false"
+    from engine.ai.service import ai_enabled
+
+    return ai_enabled()
+
+
+def ai_configured() -> bool:
+    from engine.ai.service import provider_configs
+
+    return ai_is_enabled() and bool(provider_configs())
 
 
 @app.get("/api/health")
@@ -209,7 +217,7 @@ async def health() -> dict[str, Any]:
         "season": DEFAULT_SEASON,
         "official_api_configured": first_configured(),
         "toa_configured": bool(os.getenv("TOA_API_KEY", "").strip()),
-        "ai_configured": ai_is_enabled() and bool(os.getenv("GOOGLE_API_KEY", "").strip()),
+        "ai_configured": ai_configured(),
         "sources": {
             "first": "FIRST FTC Events API",
             "toa": "The Orange Alliance API",
@@ -233,12 +241,15 @@ async def sdk_inventory() -> dict[str, Any]:
          "data": "Public FTC data. No authentication required.", "url": "https://ftcscout.org", "required": False},
     ]
     if ai_enabled:
-        third_party.append({
-            "name": "Google Gemini AI",
-            "purpose": "AI-powered match analysis and alliance recommendations (set AI_ENABLED=false to disable).",
-            "data": "Scout notes and team data are sent to Google when AI features are used. Do not enter personal data, especially data of minors.",
-            "url": "https://ai.google.dev", "required": False,
-        })
+        from engine.ai.service import provider_configs
+
+        for prov in provider_configs():
+            third_party.append({
+                "name": f"{prov['label']} ({prov['model']})",
+                "purpose": "VITE Strategist and dictation (set AI_ENABLED=false to disable).",
+                "data": "Only your messages and the data the AI reads with its tools (team stats, schedule, scout notes) are sent, and only when you use AI. Do not enter personal data, especially of minors.",
+                "url": "", "required": False,
+            })
     return {
         "thirdParty": third_party,
         "notUsed": ["Google Analytics", "advertising SDKs", "session replay", "payment processors"],
@@ -352,66 +363,11 @@ async def ftcscout_event_matches(code: str, season: str = Query(str(DEFAULT_SEAS
         raise scout_error(exc) from exc
 
 
-# ── Gemini AI (server key only) ──────────────────────────────────────────
+# ── VITE AI Engine (keys stay on the server; tools run in the browser) ───
 
-class MatchAnalysisBody(BaseModel):
-    alliance1_teams: list[str] = Field(default_factory=list, max_length=3)
-    alliance2_teams: list[str] = Field(default_factory=list, max_length=3)
-    scout_data: str = Field("", max_length=6000)
-    season: str = Field("2026-2027", max_length=12)
+from engine.ai.routes import build_router  # noqa: E402
 
-
-class RecommendationBody(BaseModel):
-    available_teams: list[str] = Field(default_factory=list, max_length=80)
-    my_team: str = Field("", max_length=40)
-    season: str = Field("2026-2027", max_length=12)
-
-
-_ai_budget = {"day": "", "used": 0}
-
-
-def ai_guard() -> None:
-    """AI on/off switch plus a per-day call budget so a public URL cannot drain the API quota."""
-    if not ai_is_enabled():
-        raise HTTPException(status_code=503, detail="AI features are disabled on this server.")
-    if not os.getenv("GOOGLE_API_KEY", "").strip():
-        raise HTTPException(status_code=503, detail="AI is not configured on this server.")
-    today = date.today().isoformat()
-    if _ai_budget["day"] != today:
-        _ai_budget.update(day=today, used=0)
-    limit = int(os.getenv("AI_DAILY_LIMIT", "200") or 200)
-    if _ai_budget["used"] >= limit:
-        raise HTTPException(status_code=429, detail="Daily AI limit reached. Try again tomorrow.")
-    _ai_budget["used"] += 1
-
-
-async def _run_ai(coro_factory) -> Any:
-    from engine.gemini import AIFailed, AIUnavailable
-
-    ai_guard()
-    try:
-        return await coro_factory()
-    except AIUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except AIFailed as exc:
-        log.warning("Gemini call failed: %r", exc.__cause__)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@app.post("/api/gemini/analyze-match")
-@limiter.limit("10/minute")
-async def gemini_analyze_match(request: Request, body: MatchAnalysisBody) -> Any:
-    from engine.gemini import analyze_match_with_gemini
-
-    return await _run_ai(lambda: analyze_match_with_gemini(body.alliance1_teams, body.alliance2_teams, body.scout_data, body.season))
-
-
-@app.post("/api/gemini/alliance-recommendation")
-@limiter.limit("10/minute")
-async def gemini_recommendation(request: Request, body: RecommendationBody) -> Any:
-    from engine.gemini import get_alliance_recommendation
-
-    return await _run_ai(lambda: get_alliance_recommendation(body.available_teams, body.my_team, body.season))
+app.include_router(build_router(limiter))
 
 
 @app.api_route("/api/{rest:path}", methods=["GET", "POST"], include_in_schema=False)
