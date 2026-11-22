@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, FileUp, Loader2 } from "lucide-react";
 import { Button, DemoBanner, Field, inputClass, PageHeader, Panel } from "../components/ui";
 import { confirmDialog, toast } from "../components/feedback";
 import { api } from "../lib/api";
 import { download, safeFileName } from "../lib/csv";
-import { applyEvent, applySchedule, emptyDb, importScoutingCsv, mergeDb, migrateDb, scoutingCsv } from "../lib/db";
+import { applyEvent, emptyDb, importScoutingCsv, mergeDb, migrateDb, scoutingCsv } from "../lib/db";
+import { useScheduleSyncState } from "../lib/scheduleSync";
 import { loadEventTeams, teamsToDb } from "../lib/eventLoader";
 import { makeSeed } from "../lib/model";
 import { tr } from "../lib/i18n";
@@ -51,7 +52,32 @@ export default function Data({ db, setDb, setPrefs }) {
   const [toaKey, setToaKey] = useState("");
   const [busy, setBusy] = useState("");
   const [out, setOut] = useState(null);
-  const [rankings, setRankings] = useState([]);
+  const [rankings, setRankings] = useState(null); // null = loading
+  const [rankError, setRankError] = useState("");
+  const sync = useScheduleSyncState();
+
+  // World ranking loads by itself (and again when the season changes).
+  useEffect(() => {
+    let alive = true;
+    setRankings(null);
+    setRankError("");
+    api
+      .rankings(season, 40)
+      .then((d) => {
+        if (!alive) return;
+        // FTCScout returns one row per team per event: keep each team's best (first) row.
+        const seen = new Set();
+        setRankings((d.rankings || []).filter((r) => !seen.has(r.teamNumber) && seen.add(r.teamNumber)).slice(0, 10));
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setRankError(e.message);
+        setRankings([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [season]);
   const [consent, setConsent] = useState(false);
   const stamp = new Date().toISOString().slice(0, 10);
   const name = safeFileName(db.meta.eventCode || "vite");
@@ -182,22 +208,6 @@ export default function Data({ db, setDb, setPrefs }) {
               {tr("Загрузить команды")}
             </Button>
             <Button
-              variant="secondary"
-              disabled={!code || Boolean(busy) || db.meta.eventCode !== code.toUpperCase()}
-              title={db.meta.eventCode !== code.toUpperCase() ? tr("Сначала загрузите команды этого ивента") : ""}
-              onClick={() =>
-                run("schedule", async () => {
-                  const d = await api.eventMatches(season, code.toUpperCase());
-                  if (!d.matches?.length) throw new Error(tr("Расписание этого ивента ещё не опубликовано."));
-                  setDb((x) => applySchedule(x, { season, eventCode: code.toUpperCase(), matches: d.matches }));
-                  setOut(`${tr("Матчей в расписании")}: ${d.matches.length}, ${tr("сыграно")}: ${d.matches.filter((m) => m.played).length}.`);
-                })
-              }
-            >
-              {busy === "schedule" ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
-              {tr("Загрузить расписание и результаты")}
-            </Button>
-            <Button
               variant="ghost"
               disabled={Boolean(busy)}
               onClick={() =>
@@ -213,25 +223,34 @@ export default function Data({ db, setDb, setPrefs }) {
             </Button>
           </div>
           {out ? <p className="mt-3 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-300" role="status">{out}</p> : null}
+          {!db.meta.demo && db.meta.eventCode ? (
+            <p className="mt-3 flex items-center gap-2 text-xs text-zinc-500" role="status">
+              {sync.loading ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" aria-hidden="true" />}
+              {tr("Расписание и результаты")} {db.meta.eventCode}:{" "}
+              {db.schedule?.eventCode === db.meta.eventCode
+                ? `${db.schedule.matches.length} ${tr("матчей")}, ${tr("сыграно")} ${db.schedule.matches.filter((m) => m.played).length} · ${tr("обновляются автоматически")}`
+                : sync.loading
+                  ? tr("загружаются…")
+                  : tr("ещё не опубликованы — VITE проверяет автоматически")}
+            </p>
+          ) : null}
         </Panel>
 
         <Panel title={tr("Мировой рейтинг FTCScout")} subtitle={tr("Лучшие OPR сезона по всем ивентам — для ориентира.")}>
-          <Button
-            variant="secondary"
-            disabled={Boolean(busy)}
-            onClick={() =>
-              run("rank", async () => {
-                const d = await api.rankings(season, 10);
-                setRankings(d.rankings || []);
-                if (!d.rankings?.length) toast(tr("Рейтинг пока пуст."));
-              })
-            }
-          >
-            {busy === "rank" ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
-            {tr("Показать топ-10")}
-          </Button>
-          {rankings.length ? (
-            <ol className="mt-3 space-y-1.5 text-sm">
+          {rankings === null ? (
+            <p className="flex items-center gap-2 text-sm text-zinc-500" role="status">
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              {tr("Загружаю рейтинг…")}
+            </p>
+          ) : rankError ? (
+            <p className="text-sm text-zinc-400">
+              {tr("Рейтинг недоступен")}: {rankError}
+            </p>
+          ) : !rankings.length ? (
+            <p className="text-sm text-zinc-500">{tr("Рейтинг пока пуст.")}</p>
+          ) : null}
+          {rankings?.length ? (
+            <ol className="space-y-1.5 text-sm">
               {rankings.map((r, i) => (
                 <li key={`${r.teamNumber}-${r.eventCode}`} className="flex justify-between gap-2">
                   <span className="truncate">

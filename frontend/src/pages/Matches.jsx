@@ -1,15 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CalendarClock, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Badge, Button, EmptyState, IconButton, inputClass, PageHeader, Panel, Segmented, SplitBar, Stat } from "../components/ui";
 import { toast } from "../components/feedback";
-import { api } from "../lib/api";
-import { applySchedule } from "../lib/db";
+import { syncSchedule, useScheduleSyncState } from "../lib/scheduleSync";
 import { calibration, computeOpr, fmt, predictMatch } from "../lib/model";
 import { getLang, tr } from "../lib/i18n";
-
-function seasonOf(db) {
-  return (String(db.meta.season || "").match(/\d{4}/) || ["2026"])[0];
-}
 
 function timeText(iso) {
   if (!iso) return "";
@@ -19,27 +14,36 @@ function timeText(iso) {
 }
 
 function Alliance({ teams, side, mine, byNumber, onTeam, won }) {
+  const blue = side === "blue";
   return (
-    <div className={`flex flex-wrap items-center gap-1.5 ${side === "blue" ? "sm:justify-end" : ""}`}>
-      {teams.map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onTeam(n)}
-          title={byNumber.get(n)?.name || ""}
-          className={`num rounded-md border px-2 py-1 text-xs transition-colors hover:border-white ${side === "red" ? "border-zinc-500" : "border-dashed border-zinc-600"} ${n === mine ? "bg-white font-semibold text-black" : won ? "text-white" : "text-zinc-300"}`}
-        >
-          {n}
-        </button>
-      ))}
+    <div className={`flex min-w-0 flex-col gap-1.5 ${blue ? "items-end" : "items-start"}`}>
+      {teams.map((n) => {
+        const name = byNumber.get(n)?.name || "";
+        const isMine = n === mine;
+        return (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onTeam(n)}
+            title={name ? `${n} · ${name}` : n}
+            className={`flex w-full max-w-[13rem] items-baseline gap-2 rounded-md border px-2.5 py-1.5 text-left transition-colors hover:border-white ${blue ? "flex-row-reverse text-right" : ""} ${
+              side === "red" ? "border-zinc-500" : "border-dashed border-zinc-600"
+            } ${isMine ? "bg-white text-black" : ""}`}
+          >
+            <span className={`num shrink-0 text-xs font-semibold ${isMine ? "text-black" : won ? "text-white" : "text-zinc-200"}`}>{n}</span>
+            <span className={`min-w-0 truncate text-xs ${isMine ? "text-zinc-600" : "text-zinc-500"}`}>{name || "—"}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 export default function Matches({ db, setDb, go, prefs, setPrefs }) {
-  const [loading, setLoading] = useState(false);
+  const sync = useScheduleSyncState();
+  const dbRef = useRef(db);
+  dbRef.current = db;
   const [filter, setFilter] = useState(() => (db.schedule?.matches?.some((m) => !m.played) ? "upcoming" : "all"));
-  const season = seasonOf(db);
   const schedule = db.schedule && db.schedule.eventCode === db.meta.eventCode ? db.schedule : null;
   const byNumber = useMemo(() => new Map(db.teams.map((t) => [t.number, t])), [db.teams]);
   const mine = prefs.myTeam || "";
@@ -47,23 +51,14 @@ export default function Matches({ db, setDb, go, prefs, setPrefs }) {
   const opr = useMemo(() => computeOpr(schedule?.matches), [schedule]);
   const calib = useMemo(() => (schedule ? calibration(db, schedule.matches) : null), [db, schedule]);
 
-  async function load() {
-    if (!db.meta.eventCode || db.meta.demo) return;
-    setLoading(true);
-    try {
-      const data = await api.eventMatches(season, db.meta.eventCode);
-      if (!data.matches?.length) {
-        toast(tr("Расписание этого ивента ещё не опубликовано."), { error: true });
-        return;
-      }
-      setDb((d) => applySchedule(d, { season, eventCode: d.meta.eventCode, matches: data.matches }));
-      toast(`${tr("Расписание обновлено")}: ${data.matches.length} ${tr("матчей")}`);
-    } catch (e) {
-      toast(`${tr("Не удалось загрузить расписание")}: ${e.message}`, { error: true });
-    } finally {
-      setLoading(false);
-    }
+  // Manual refresh is optional: the schedule also syncs automatically (lib/scheduleSync.js).
+  async function refresh() {
+    const r = await syncSchedule(() => dbRef.current, setDb);
+    if (r.error) toast(`${tr("Не удалось загрузить расписание")}: ${r.error}`, { error: true });
+    else if (r.ok && !r.matches) toast(tr("Расписание этого ивента ещё не опубликовано."));
+    else if (r.ok) toast(r.changed ? tr("Есть новые результаты.") : tr("Новых результатов пока нет."));
   }
+  const loading = sync.loading;
 
   const list = useMemo(() => {
     if (!schedule) return [];
@@ -84,10 +79,15 @@ export default function Matches({ db, setDb, go, prefs, setPrefs }) {
       subtitle={tr("Официальное расписание и результаты (FTCScout) + прогноз по вашему скаутингу и OPR.")}
       actions={
         db.meta.eventCode && !db.meta.demo ? (
-          <Button variant={schedule ? "secondary" : "primary"} onClick={load} disabled={loading}>
-            {loading ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}
-            {schedule ? tr("Обновить") : tr("Загрузить расписание")}
-          </Button>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-xs text-zinc-500" role="status">
+              {loading ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" aria-hidden="true" />}
+              {loading ? tr("Обновляю…") : schedule && schedule.matches.length && schedule.matches.every((m) => m.played) ? tr("Турнир завершён") : tr("Автообновление каждые 2 мин")}
+            </span>
+            <IconButton label={tr("Обновить сейчас")} className="border border-zinc-800" onClick={refresh} disabled={loading}>
+              <RefreshCw size={15} aria-hidden="true" />
+            </IconButton>
+          </div>
         ) : null
       }
     />
@@ -106,7 +106,16 @@ export default function Matches({ db, setDb, go, prefs, setPrefs }) {
     return (
       <div>
         {header}
-        <EmptyState icon={CalendarClock} title={tr("Расписание ещё не загружено")} body={tr("Загрузите его один раз — дальше оно доступно офлайн и попадает в резервную копию.")} action={<Button onClick={load} disabled={loading}>{tr("Загрузить расписание")}</Button>} />
+        {loading || (!sync.syncedAt && !sync.error) ? (
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-800 px-5 py-10 text-sm text-zinc-400" role="status">
+            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            {tr("Загружаю расписание и результаты…")}
+          </div>
+        ) : sync.error ? (
+          <EmptyState icon={CalendarClock} title={tr("Не удалось загрузить расписание")} body={`${sync.error}. ${tr("VITE попробует снова автоматически.")}`} action={<Button onClick={refresh}>{tr("Повторить")}</Button>} />
+        ) : (
+          <EmptyState icon={CalendarClock} title={tr("Расписание ещё не опубликовано")} body={tr("Как только организаторы его опубликуют, оно появится здесь само — VITE проверяет каждые 2 минуты.")} />
+        )}
       </div>
     );
   }
@@ -118,7 +127,7 @@ export default function Matches({ db, setDb, go, prefs, setPrefs }) {
       {header}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label={tr("Сыграно")} value={`${played} / ${schedule.matches.length}`} sub={schedule.fetchedAt ? `${tr("обновлено")} ${timeText(schedule.fetchedAt)}` : ""} />
+        <Stat label={tr("Сыграно")} value={`${played} / ${schedule.matches.length}`} sub={sync.syncedAt || schedule.fetchedAt ? `${tr("обновлено")} ${timeText(sync.syncedAt ? new Date(sync.syncedAt).toISOString() : schedule.fetchedAt)}` : ""} />
         <Stat label={tr("Точность модели")} value={calib ? `${Math.round(calib.accuracy * 100)}%` : "—"} sub={calib ? `${calib.n} ${tr("матчей")} · Brier ${fmt(calib.brier, 2)}` : tr("нужен скаутинг до матча")} />
         <Stat label={tr("Средний счёт альянса")} value={played ? fmt(schedule.matches.filter((m) => m.played).reduce((s, m) => s + m.redScore + m.blueScore, 0) / (2 * played), 0) : "—"} />
         <Stat label="OPR" value={opr.matches ? `±${fmt(opr.residualSd, 0)}` : "—"} sub={opr.matches ? tr("типичная ошибка прогноза альянса") : tr("после первых матчей")} />
@@ -160,7 +169,7 @@ export default function Matches({ db, setDb, go, prefs, setPrefs }) {
                 const blueWon = m.played && m.blueScore > m.redScore;
                 const label = m.level === "qual" ? `Q${m.number}` : `P${m.series}-${m.number}`;
                 return (
-                  <li key={`${m.level}-${m.series}-${m.number}`} className={`grid gap-3 px-4 py-3 sm:grid-cols-[56px_minmax(0,1fr)_minmax(0,220px)] sm:items-center sm:px-5 ${mine && [...m.red, ...m.blue].includes(mine) ? "bg-zinc-900/40" : ""}`}>
+                  <li key={`${m.level}-${m.series}-${m.number}`} className={`grid gap-3 px-4 py-3 sm:grid-cols-[56px_minmax(0,1fr)_minmax(0,200px)] sm:items-center sm:px-5 ${mine && [...m.red, ...m.blue].includes(mine) ? "bg-zinc-900/40" : ""}`}>
                     <div className="flex items-center gap-2 sm:block">
                       <div className="num text-sm font-semibold text-white">{label}</div>
                       <div className="text-[11px] text-zinc-500">{timeText(m.time)}</div>

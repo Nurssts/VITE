@@ -13,6 +13,14 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error("VITE screen error:", error, info?.componentStack);
+    // After a deploy, an old tab asks for chunk files that no longer exist: reload once by itself.
+    if (/dynamically imported module|Loading chunk|Failed to fetch/i.test(String(error?.message))) {
+      const last = Number(sessionStorage.getItem("vite-chunk-reload") || 0);
+      if (Date.now() - last > 30000) {
+        sessionStorage.setItem("vite-chunk-reload", String(Date.now()));
+        location.reload();
+      }
+    }
   }
 
   render() {
