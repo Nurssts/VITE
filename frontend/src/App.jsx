@@ -10,6 +10,7 @@ import { useAppState } from "./app/useAppState";
 import { applyEvent } from "./lib/db";
 import { tr } from "./lib/i18n";
 import { aiStore } from "./lib/ai/memory";
+import { useScheduleSync } from "./lib/scheduleSync";
 
 // Each screen is its own chunk: the first paint does not wait for charts or the simulator.
 const pages = {
@@ -38,6 +39,9 @@ export default function App() {
 
   // AI chats and memory follow the same storage consent as scouting data.
   useEffect(() => aiStore.setPersist(allowStorage), [allowStorage]);
+
+  // Official schedule and results load and refresh by themselves (no "Load" button needed).
+  useScheduleSync(db, setDb, Boolean(prefs.event?.set));
 
   // Number keys switch sections (not while typing, with modifiers or inside a dialog).
   useEffect(() => {
