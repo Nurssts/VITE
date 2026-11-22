@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Brain, Check, ChevronRight, Copy, Loader2, Mic, MicOff, Plus, Send, ShieldCheck, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Wrench, X } from "lucide-react";
+import { Brain, Check, ChevronRight, Copy, Loader2, Mic, MicOff, Plus, Send, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Wrench, X } from "lucide-react";
 import Markdown from "../components/Markdown";
 import { Badge, Button, EmptyState, IconButton, PageHeader, Panel } from "../components/ui";
 import { confirmDialog, toast } from "../components/feedback";
@@ -112,7 +112,6 @@ function Message({ m, results, threadId, index, feedback, onCopy }) {
           <IconButton label={tr("Неточно")} className={`h-7 w-7 ${fb === "down" ? "text-white" : ""}`} onClick={() => aiStore.setFeedback(key, fb === "down" ? null : "down")}>
             <ThumbsDown size={13} aria-hidden="true" />
           </IconButton>
-          {m.provider ? <span className="ml-1 text-[11px]">{m.provider}</span> : null}
         </div>
       ) : null}
     </div>
@@ -286,13 +285,13 @@ ${langLine}`, display: title, ts: Date.now() }];
   useEffect(() => {
     const { mission, target } = route.query || {};
     const key = `${mission}|${target}`;
-    if (!mission || !status?.configured || !prefs.aiConsent || launched.current === key) return;
+    if (!mission || !status?.configured || launched.current === key) return;
     const m = status.missions.find((x) => x.id === mission);
     if (!m) return;
     launched.current = key;
     go("ai");
     startMission(m, target);
-  }, [route.query, status, prefs.aiConsent]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [route.query, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const speech = useSpeech((text) => setInput((v) => (v ? `${v} ${text}` : text)));
 
@@ -304,16 +303,15 @@ ${langLine}`, display: title, ts: Date.now() }];
 
   const copy = (text) => navigator.clipboard?.writeText(text).then(() => toast(tr("Скопировано.")), () => toast(tr("Не удалось скопировать."), { error: true }));
   const missions = status?.missions || [];
-  const provider = status?.providers?.find((p) => p.id === status.active) || status?.providers?.[0];
 
   const header = (
     <PageHeader
       title="VITE Strategist"
       subtitle={tr("AI-аналитик вашей команды: читает ваш скаутинг, расписание и модели VITE, планирует шаги, считает и предлагает действия — вы подтверждаете.")}
       actions={
-        provider ? (
-          <Badge tone="outline" title={provider.model}>
-            <Sparkles size={12} aria-hidden="true" /> {provider.label} · {provider.model}
+        status?.configured && status?.enabled ? (
+          <Badge tone="outline">
+            <Sparkles size={12} aria-hidden="true" /> {status.available ? tr("AI готов") : tr("AI временно недоступен")}
           </Badge>
         ) : null
       }
@@ -341,32 +339,9 @@ ${langLine}`, display: title, ts: Date.now() }];
           body={
             statusError
               ? `${statusError}. ${tr("Остальные функции VITE работают без AI.")}`
-              : tr("Администратор сервера должен задать ключ одного провайдера: GOOGLE_API_KEY (Gemini, есть бесплатный тариф), ANTHROPIC_API_KEY (Claude) или AI_OPENAI_BASE_URL + AI_OPENAI_MODEL (OpenAI, DeepSeek, Qwen, Groq, Ollama). Остальные функции VITE работают без AI.")
+              : tr("AI будет доступен, когда администратор подключит его на сервере. Остальные функции VITE работают без AI.")
           }
         />
-      </div>
-    );
-  }
-
-  if (!prefs.aiConsent) {
-    return (
-      <div>
-        {header}
-        <Panel className="max-w-2xl">
-          <div className="flex items-start gap-3">
-            <ShieldCheck size={20} className="mt-0.5 shrink-0 text-zinc-400" aria-hidden="true" />
-            <div className="space-y-2 text-sm text-zinc-300">
-              <p className="font-semibold text-white">{tr("Что увидит AI")}</p>
-              <p>
-                {tr("Ваши сообщения и только те данные, которые AI запросит инструментами: статистику команд, расписание и (если разрешено) заметки скаутов. Данные уходят провайдеру")} <strong className="text-white">{provider?.label}</strong> {tr("через сервер VITE; ключи остаются на сервере.")}
-              </p>
-              <p>{tr("Изменения данных (наблюдения, заметки, драфт) AI выполняет только после вашего подтверждения. Не вводите ФИО и контакты учеников.")}</p>
-              <Button className="mt-2" onClick={() => setPrefs((p) => ({ ...p, aiConsent: true }))}>
-                {tr("Включить AI")}
-              </Button>
-            </div>
-          </div>
-        </Panel>
       </div>
     );
   }
@@ -582,9 +557,6 @@ ${langLine}`, display: title, ts: Date.now() }];
                 <dd className="num text-zinc-200">{(status.usage.inputTokens + status.usage.outputTokens).toLocaleString()}</dd>
               </div>
             </dl>
-            <button type="button" className="mt-3 text-xs text-zinc-500 underline-offset-4 hover:text-white hover:underline" onClick={() => setPrefs((p) => ({ ...p, aiConsent: false }))}>
-              {tr("Выключить AI на этом устройстве")}
-            </button>
           </Panel>
         </aside>
       </div>

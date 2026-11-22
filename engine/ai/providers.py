@@ -29,13 +29,15 @@ import httpx
 
 
 class ProviderError(RuntimeError):
-    """Safe-to-show provider failure. `retryable` = worth retrying / falling back."""
+    """Safe-to-show failure. The message never names the provider or model (users only see
+    "the AI service"); `detail` holds the technical cause for server logs only."""
 
-    def __init__(self, message: str, *, retryable: bool = False, status: int = 0, auth: bool = False):
+    def __init__(self, message: str, *, retryable: bool = False, status: int = 0, auth: bool = False, detail: str = ""):
         super().__init__(message)
         self.retryable = retryable
         self.status = status
         self.auth = auth
+        self.detail = detail
 
 
 @dataclass
@@ -117,15 +119,15 @@ class AnthropicProvider:
                         yield {"type": "text", "delta": event.text}
                 final = await stream.get_final_message()
         except anthropic.AuthenticationError as exc:
-            raise ProviderError("Anthropic rejected the API key.", status=401, auth=True) from exc
+            raise ProviderError("The AI service rejected the server key.", status=401, auth=True, detail="anthropic 401") from exc
         except anthropic.PermissionDeniedError as exc:
-            raise ProviderError("Anthropic denied access to this model.", status=403, auth=True) from exc
+            raise ProviderError("The AI service denied access.", status=403, auth=True, detail="anthropic 403") from exc
         except anthropic.RateLimitError as exc:
-            raise ProviderError("Anthropic rate limit reached.", retryable=True, status=429) from exc
+            raise ProviderError("The AI service is busy. Try again in a minute.", retryable=True, status=429, detail="anthropic 429") from exc
         except anthropic.APIStatusError as exc:
-            raise ProviderError(f"Anthropic returned HTTP {exc.status_code}.", retryable=exc.status_code >= 500, status=exc.status_code) from exc
+            raise ProviderError(f"The AI service returned an error (HTTP {exc.status_code}).", retryable=exc.status_code >= 500, status=exc.status_code, detail=f"anthropic {exc.status_code}") from exc
         except anthropic.APIConnectionError as exc:
-            raise ProviderError("Could not reach Anthropic.", retryable=True) from exc
+            raise ProviderError("Could not reach the AI service.", retryable=True, detail="anthropic connection") from exc
         except ValueError as exc:  # unparseable streamed tool input (eager streaming)
             raise ProviderError("The model produced an invalid tool call.", retryable=True) from exc
 
@@ -243,10 +245,13 @@ class OpenAICompatProvider:
                         # Gemini answers 400 "API key not valid" instead of 401
                         auth = res.status_code in (401, 403) or (res.status_code == 400 and "api key" in detail.lower())
                         raise ProviderError(
-                            f"{self.id} returned HTTP {res.status_code}" + ("" if auth else f": {_short(detail)}"),
+                            "The AI service rejected the server key." if auth
+                            else "The AI service is busy. Try again in a minute." if res.status_code == 429
+                            else f"The AI service returned an error (HTTP {res.status_code}).",
                             retryable=res.status_code == 429 or res.status_code >= 500,
                             status=res.status_code,
                             auth=auth,
+                            detail=f"{self.id} HTTP {res.status_code}: {_short(detail)}",
                         )
                     async for line in res.aiter_lines():
                         if not line.startswith("data:"):
@@ -259,7 +264,7 @@ class OpenAICompatProvider:
                         except ValueError:
                             continue
                         if chunk.get("error"):
-                            raise ProviderError(f"{self.id}: {_short(json.dumps(chunk['error']))}", retryable=True)
+                            raise ProviderError("The AI service reported an error.", retryable=True, detail=f"{self.id}: {_short(json.dumps(chunk['error']))}")
                         if chunk.get("usage"):
                             u = chunk["usage"]
                             usage = _usage(u.get("prompt_tokens") or 0, u.get("completion_tokens") or 0)
@@ -283,9 +288,9 @@ class OpenAICompatProvider:
         except ProviderError:
             raise
         except httpx.TimeoutException as exc:
-            raise ProviderError(f"{self.id} timed out.", retryable=True) from exc
+            raise ProviderError("The AI service timed out.", retryable=True, detail=f"{self.id} timeout") from exc
         except httpx.HTTPError as exc:
-            raise ProviderError(f"Could not reach {self.id}.", retryable=True) from exc
+            raise ProviderError("Could not reach the AI service.", retryable=True, detail=f"{self.id} connection") from exc
 
         tail = think.flush()
         if tail:
