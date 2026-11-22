@@ -19,6 +19,14 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_OPENAI_BASE_URL
+        sync: false
+      - key: AI_OPENAI_API_KEY
+        sync: false
+      - key: AI_OPENAI_MODEL
+        sync: false
       - key: AI_ENABLED
         value: true
       - key: CORS_ORIGINS

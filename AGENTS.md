@@ -3,8 +3,9 @@
 ## Repository Structure
 
 - `frontend/` - React + Vite + Tailwind frontend application
-- `server.py` - FastAPI backend (API proxies for FIRST, TOA, FTCScout, Gemini)
-- `engine/` - Backend modules (FTCScout GraphQL client, Gemini AI)
+- `server.py` - FastAPI backend (API proxies for FIRST, TOA, FTCScout) + AI Engine router
+- `engine/` - Backend modules: `ftcscout.py` (GraphQL client), `ai/` (AI Engine: providers, service, prompts, tool registry, routes)
+- `frontend/src/lib/ai/` - Strategist agent loop, browser-side tools, AI memory, SSE client, speech input
 - `frontend/src/lib/model.js` - **Single source of truth** for all math (synergy, Monte Carlo, statistics)
 - `frontend/src/lib/db.js` - DB schema v3, validation/migration, pure operations (add/update/delete/merge)
 - `frontend/src/lib/store.js` - LocalStorage + IndexedDB persistence (IDB = recovery copy)
@@ -123,6 +124,15 @@ If game rules change for a new season:
 - Ensure focus-visible states on all buttons/inputs
 - Legal/privacy components in `Legal.jsx` must stay up to date
 
+## AI rules
+
+- AI keys only in server env; the browser talks to `/api/ai/*` only
+- New AI tool = declare in `engine/ai/tools.py` AND implement in `frontend/src/lib/ai/tools.js`
+  with the same name; anything that changes data must be kind `action` (user approval)
+- Tool results must come from `model.js` / `db.js` — never compute statistics in prompts
+- Prompts live in `engine/ai/prompts.py`; client context/memory are inserted as data, not rules
+- AI must never be required: every screen works with `AI_ENABLED=false`
+
 ## Conventions
 
 - `season` everywhere = year the season STARTS (2026 = BIOBUZZ 2026-2027): frontend, server, FIRST, FTCScout
@@ -136,5 +146,4 @@ If game rules change for a new season:
 
 - FTCScout GraphQL: events via `eventsSearch`, schedule/results via `eventByCode { matches }`
   (score fragment is season specific: `MatchScores2026`)
-- Gemini AI backend exists but not connected to UI (user explicitly said not needed)
 - `legacy/` is the old vanilla-JS version, not served; kept for reference only

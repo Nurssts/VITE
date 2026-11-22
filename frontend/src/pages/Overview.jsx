@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ClipboardList, Users } from "lucide-react";
+import { ClipboardList, Sparkles, Users } from "lucide-react";
 import { Badge, Button, DemoBanner, EmptyState, Kpi, PageHeader, Panel, ProfileBars, td, th } from "../components/ui";
 import { allStats, avg, fmt, MODEL_VERSION, priority, roleLabel } from "../lib/model";
 import { t, tr } from "../lib/i18n";
@@ -43,6 +43,10 @@ export default function Overview({ db, lang, go, setPrefs }) {
         subtitle={[db.meta.eventCode, db.meta.season, MODEL_VERSION].filter(Boolean).join(" · ")}
         actions={
           <>
+            <Button variant="secondary" onClick={() => go("ai")}>
+              <Sparkles size={15} aria-hidden="true" />
+              Strategist
+            </Button>
             <Button variant="secondary" onClick={() => go("matches")}>
               {tr("Матчи")}
             </Button>

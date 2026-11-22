@@ -40,13 +40,21 @@ export function useAppState() {
     if (!r.ok) toast(r.error === "quota" ? tr("Память браузера заполнена: данные НЕ сохранены. Скачайте JSON-копию в разделе «Данные».") : tr("Браузер запретил сохранение. Скачайте JSON-копию."), { error: true, duration: 9000 });
   }, [db, allowStorage]);
 
-  // Data safety: ask the browser not to evict storage, and offer recovery from the IndexedDB copy.
+  // Data safety: ask the browser not to evict storage.
   useEffect(() => {
-    if (!allowStorage) return;
-    requestPersistence();
-    if (initial.source === "local") return;
+    if (allowStorage) requestPersistence();
+  }, [allowStorage]);
+
+  // Recovery from the IndexedDB copy — only at start-up, when storage was already allowed but the
+  // main copy is missing or broken. (Checking on a later consent toggle would find the demo seed
+  // that was just written and offer it back as a "backup".) Demo-only copies are never offered.
+  const recoveryChecked = useRef(false);
+  useEffect(() => {
+    if (recoveryChecked.current) return;
+    recoveryChecked.current = true;
+    if (!allowStorage || initial.source === "local") return;
     readBackup().then(async (backup) => {
-      if (!backup?.records?.length) return;
+      if (!backup?.records?.length || backup.meta?.demo) return;
       const ok = await confirmDialog({
         title: tr("Найдена резервная копия"),
         body: `${tr("В резервном хранилище браузера есть данные скаутинга")}: ${backup.records.length} ${tr("записей")}, ${backup.teams.length} ${tr("команд")}. ${tr("Восстановить их?")}`,

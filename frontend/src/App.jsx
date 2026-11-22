@@ -9,10 +9,12 @@ import { useRoute } from "./app/router";
 import { useAppState } from "./app/useAppState";
 import { applyEvent } from "./lib/db";
 import { tr } from "./lib/i18n";
+import { aiStore } from "./lib/ai/memory";
 
 // Each screen is its own chunk: the first paint does not wait for charts or the simulator.
 const pages = {
   overview: lazy(() => import("./pages/Overview")),
+  ai: lazy(() => import("./pages/Strategist")),
   scouting: lazy(() => import("./pages/Scouting")),
   matches: lazy(() => import("./pages/Matches")),
   teams: lazy(() => import("./pages/Teams")),
@@ -33,6 +35,9 @@ export default function App() {
   const { prefs, setPrefs, lang, db, setDb, allowStorage, saveState } = state;
   const [route, go] = useRoute();
   const page = route.page;
+
+  // AI chats and memory follow the same storage consent as scouting data.
+  useEffect(() => aiStore.setPersist(allowStorage), [allowStorage]);
 
   // Number keys switch sections (not while typing, with modifiers or inside a dialog).
   useEffect(() => {

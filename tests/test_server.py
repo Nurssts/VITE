@@ -11,10 +11,9 @@ from engine.ftcscout import FTCScoutError
 
 @pytest.fixture()
 def client(monkeypatch):
-    for key in ("FTC_API_USERNAME", "FTC_API_TOKEN", "TOA_API_KEY", "GOOGLE_API_KEY", "AI_ENABLED"):
+    for key in ("FTC_API_USERNAME", "FTC_API_TOKEN", "TOA_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "AI_OPENAI_BASE_URL", "AI_OPENAI_API_KEY", "OPENAI_API_KEY", "AI_ENABLED"):
         monkeypatch.delenv(key, raising=False)
     ftcscout.clear_cache()
-    server._ai_budget.update(day="", used=0)
     return TestClient(server.app)
 
 
@@ -85,35 +84,6 @@ def test_rankings_take_is_bounded(client):
 def test_unknown_api_path_is_json_404(client):
     r = client.get("/api/does-not-exist")
     assert r.status_code == 404 and r.headers["content-type"].startswith("application/json")
-
-
-def test_ai_disabled_and_unconfigured(client, monkeypatch):
-    monkeypatch.setenv("AI_ENABLED", "false")
-    assert client.post("/api/gemini/analyze-match", json={}).status_code == 503
-    monkeypatch.setenv("AI_ENABLED", "true")
-    r = client.post("/api/gemini/analyze-match", json={})
-    assert r.status_code == 503 and "not configured" in r.json()["detail"]
-
-
-def test_ai_input_is_validated(client, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "k")
-    r = client.post("/api/gemini/analyze-match", json={"alliance1_teams": ["1", "2", "3", "4"]})
-    assert r.status_code == 422
-
-
-def test_ai_daily_budget(client, monkeypatch):
-    import engine.gemini as gemini
-
-    monkeypatch.setenv("GOOGLE_API_KEY", "k")
-    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
-
-    async def fake(*args):
-        return {"result": {"recommendations": []}}
-
-    monkeypatch.setattr(gemini, "get_alliance_recommendation", fake)
-    body = {"available_teams": ["1"], "my_team": "2"}
-    assert client.post("/api/gemini/alliance-recommendation", json=body).status_code == 200
-    assert client.post("/api/gemini/alliance-recommendation", json=body).status_code == 429
 
 
 @pytest.mark.anyio

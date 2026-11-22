@@ -2,7 +2,7 @@
 // and links can be shared between scouts on the same device without a server-side router.
 import { useCallback, useEffect, useState } from "react";
 
-export const PAGES = ["overview", "scouting", "matches", "teams", "analysis", "draft", "notebook", "data", "settings", "legal"];
+export const PAGES = ["overview", "ai", "scouting", "matches", "teams", "analysis", "draft", "notebook", "data", "settings", "legal"];
 
 export function parseHash(hash) {
   const raw = String(hash || "").replace(/^#\/?/, "");

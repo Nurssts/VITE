@@ -54,6 +54,8 @@ export function defaultPrefs() {
     age: { confirmed: false, over13: false, guardian: false },
     displayName: "",
     myTeam: "",
+    aiConsent: false, // explicit opt-in before anything is sent to an AI provider
+    aiShareNotes: true,
     lang: null, // null = not chosen yet (shows language picker)
   };
 }
@@ -168,7 +170,7 @@ export async function storageEstimate() {
 }
 
 export function wipeAll() {
-  for (const key of [STORE_KEY, PREFS_KEY]) {
+  for (const key of [STORE_KEY, PREFS_KEY, "vite-ai-v1"]) { // vite-ai-v1 = AI chats and memory (lib/ai/memory.js)
     try {
       localStorage.removeItem(key);
     } catch {

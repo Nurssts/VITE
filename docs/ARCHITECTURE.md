@@ -95,3 +95,63 @@ py -3 -m pip install -r requirements-dev.txt; py -3 -m pytest -q
 ```
 
 CI (`.github/workflows/test.yml`) запускает то же самое на каждый push/PR в `main`.
+
+## VITE AI Engine (v3.0)
+
+```
+Браузер                                         Сервер (FastAPI)              Провайдер
+pages/Strategist.jsx  диалог, шаги, апрув  <-SSE->  engine/ai/routes.py   --->  Anthropic (SDK)
+lib/ai/agent.js       цикл агента          /api/ai  service.py: цепочка,       Gemini / OpenAI /
+lib/ai/tools.js       16 инструментов       /chat    ретраи, fallback,          DeepSeek / Qwen /
+  над model.js + db.js (данные на устройстве) /extract бюджеты, учёт токенов   Groq / Ollama
+lib/ai/memory.js      чаты, память, отзывы  /status  prompts.py, tools.py      (OpenAI-совместимые)
+```
+
+**Почему инструменты выполняются в браузере.** Данные скаутинга живут только на устройстве.
+Сервер — stateless-шлюз к модели (ключи только там), а цикл агента, инструменты и подтверждения
+работают рядом с данными. Модель видит лишь то, что вернули её вызовы инструментов, и не
+получает базу целиком. Сервер ничего не хранит, поэтому данные разных пользователей изолированы
+по устройству.
+
+**Цикл агента** (`lib/ai/agent.js`): сообщение пользователя → ход модели (стриминг SSE) →
+вызовы инструментов. Инструменты типа `read` и `assist` выполняются сразу, `action` — только
+после подтверждения в карточке. Результаты отправляются обратно, цикл повторяется до текстового
+ответа, максимум 8 шагов. Ход можно остановить; ошибка провайдера показывается с кнопкой
+«Повторить» и не ломает остальной VITE.
+
+**Инструменты** (`engine/ai/tools.py` объявляет, `lib/ai/tools.js` исполняет):
+
+| Тип | Инструменты |
+|---|---|
+| read | `get_event_overview`, `get_rankings`, `get_team`, `compare_alliance`, `simulate_match`, `get_schedule`, `find_best_partners`, `get_scouting_gaps`, `find_anomalies`, `search_records` |
+| assist | `remember`, `open_page` |
+| action (с подтверждением) | `set_draft`, `mark_teams_picked`, `save_team_note`, `add_observation` |
+
+**Миссии** (`prompts.py → MISSIONS`): брифинг перед матчем, пик-лист, план скаутинга, разбор
+команды, проверка качества данных. Запускаются из Strategist и с экранов «Матчи», «Команды»,
+«Драфт», «Обзор» (`#/ai?mission=...&target=...`).
+
+**Scribe** (`/api/ai/extract`, `components/Dictation.jsx`): голос или текст про одного робота
+превращается в JSON-черновик, тот через `draftToForm` заполняет форму скаутинга. Ничего не
+сохраняется без скаута.
+
+**Провайдеры.** Два адаптера:
+- `AnthropicProvider` — официальный SDK `anthropic`: стриминг, tool use, effort; блоки thinking
+  возвращаются без изменений через поле `raw`;
+- `OpenAICompatProvider` — Gemini через его OpenAI-совместимый endpoint, а также OpenAI,
+  DeepSeek, Qwen, Groq, OpenRouter и Ollama. Сохраняет `extra_content` (thought signatures
+  Gemini) и вырезает `<think>…</think>` у открытых моделей.
+
+Порядок задаёт `AI_PROVIDERS`. При ошибке до начала вывода — один повтор, затем переход к
+следующему провайдеру. Ошибка ключа выводит провайдера из ротации на 10 минут.
+
+**Расходы и защита.**
+- Лимит 40 запросов/мин на IP для `/chat`, 20/мин для `/extract`.
+- Дневной бюджет ходов (`AI_DAILY_LIMIT`) и токенов (`AI_DAILY_TOKEN_LIMIT`).
+- Лимит длины ответа и таймаут на ход.
+- Pydantic-валидация истории: роли, неизвестные инструменты, размеры (300K символов на диалог,
+  16K на результат инструмента).
+- Системный промпт формируется на сервере; контекст и память клиента вставляются как данные.
+- Ответы модели рендерятся безопасным `Markdown.jsx` без HTML.
+- Согласие пользователя (`prefs.aiConsent`) и переключатель «AI читает заметки» (`prefs.aiShareNotes`).
+- `AI_ENABLED=false` выключает AI полностью; остальной VITE работает без изменений.

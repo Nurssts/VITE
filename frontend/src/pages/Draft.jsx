@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import { Badge, Button, DemoBanner, EmptyState, inputClass, PageHeader, Panel, ProfileBars } from "../components/ui";
 import { confirmDialog } from "../components/feedback";
 import { denialPick, fmt, pairModel, roleLabel, stats, teamLabel } from "../lib/model";
@@ -44,6 +44,11 @@ export default function Draft({ db, setDb, go }) {
         title={tr("Доска драфта")}
         subtitle={tr("Подсказки по синергии и denial pick. Решение принимает капитан.")}
         actions={
+          <>
+          <Button onClick={() => go("ai", "", { mission: "picklist", target: cap?.number || "" })} disabled={!cap}>
+            <Sparkles size={15} aria-hidden="true" />
+            {tr("Пик-лист от AI")}
+          </Button>
           <Button
             variant="secondary"
             disabled={!picked.length && !removed.length}
@@ -53,6 +58,7 @@ export default function Draft({ db, setDb, go }) {
           >
             {tr("Сбросить доску")}
           </Button>
+          </>
         }
       />
       <DemoBanner demo={db.meta.demo} />
