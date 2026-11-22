@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Button, Field, inputClass, PageHeader, Panel, Segmented } from "../components/ui";
+import { Button, PageHeader, Panel, Segmented } from "../components/ui";
 import { confirmDialog, toast } from "../components/feedback";
 import { requestPersistence, storageEstimate, wipeAll } from "../lib/store";
 import { tr } from "../lib/i18n";
+import { roleLabel } from "../lib/roles";
 
 function bytes(n) {
   if (!n) return "0";
@@ -11,9 +12,8 @@ function bytes(n) {
   return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
 }
 
-export default function Settings({ prefs, setPrefs, db, saveState, allowStorage, go }) {
+export default function Settings({ prefs, setPrefs, db, saveState, allowStorage, go, openProfile }) {
   const [est, setEst] = useState(null);
-  const [name, setName] = useState(prefs.displayName || "");
   useEffect(() => {
     storageEstimate().then(setEst);
   }, [saveState]);
@@ -40,17 +40,13 @@ export default function Settings({ prefs, setPrefs, db, saveState, allowStorage,
           <p className="text-sm text-zinc-400">
             {db.meta.eventName || tr("Не выбран")} {db.meta.eventCode ? `(${db.meta.eventCode})` : ""} · {db.meta.season}
           </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <Field label={tr("Моя команда")} hint={tr("Подсвечивается в расписании матчей.")}>
-              <select className={inputClass()} value={prefs.myTeam || ""} onChange={(e) => setPrefs((p) => ({ ...p, myTeam: e.target.value }))}>
-                <option value="">—</option>
-                {db.teams.map((t) => (
-                  <option key={t.id} value={t.number}>
-                    {t.number} {t.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+          <p className="mt-2 text-sm text-zinc-400">
+            {tr("Моя команда")}: <span className="num text-zinc-100">{prefs.myTeam || "—"}</span> · {tr("Роль")}: <span className="text-zinc-100">{roleLabel(prefs.myRole) || "—"}</span>
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={openProfile}>
+              {tr("Изменить команду и роль")}
+            </Button>
             <Button variant="secondary" onClick={() => setPrefs((p) => ({ ...p, event: { ...p.event, set: false, changing: true } }))}>
               {tr("Сменить ивент")}
             </Button>
@@ -103,10 +99,7 @@ export default function Settings({ prefs, setPrefs, db, saveState, allowStorage,
         </Panel>
 
         <Panel title={tr("Возраст участника")} subtitle={tr("FTC — молодёжная программа. Локальный профиль не требует email. Подтвердите возраст или согласие наставника.")}>
-          <Field label={tr("Отображаемое имя (необязательно, без фамилии)")}>
-            <input className={inputClass()} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} onBlur={() => setPrefs((p) => ({ ...p, displayName: name.trim() }))} />
-          </Field>
-          <div className="mt-3 space-y-2 text-sm text-zinc-300">
+          <div className="space-y-2 text-sm text-zinc-300">
             <label className="flex cursor-pointer gap-2.5">
               <input type="checkbox" className="mt-0.5 h-4 w-4 accent-white" checked={prefs.age.over13} onChange={(e) => setPrefs((p) => ({ ...p, age: { ...p.age, over13: e.target.checked, confirmed: e.target.checked || p.age.guardian } }))} />
               {tr("Мне есть 13 лет.")}

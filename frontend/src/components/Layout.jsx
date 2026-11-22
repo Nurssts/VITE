@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { BarChart3, CalendarClock, Sparkles, ClipboardList, FileText, Gavel, LayoutDashboard, Menu, Plus, Settings, Upload, Users, X } from "lucide-react";
+import { BarChart3, CalendarClock, ChevronRight, Sparkles, ClipboardList, FileText, Gavel, LayoutDashboard, Menu, Plus, Settings, Upload, UserRound, Users, X } from "lucide-react";
 import { Button, IconButton } from "./ui";
 import { Logo } from "../app/Onboarding";
 import { t, tr } from "../lib/i18n";
+import { roleLabel } from "../lib/roles";
 
 // Order = keyboard shortcuts 1–9.
 const NAV = [
@@ -35,7 +36,43 @@ function SaveIndicator({ saveState, allowStorage }) {
   );
 }
 
-function Sidebar({ lang, page, go, event, onEvent, onClose }) {
+/** "Me" card in the bottom-left corner: my team and my role, opens the profile editor. */
+function ProfileCard({ profile, onProfile }) {
+  const empty = !profile.team && !profile.role;
+  const initial = (profile.name || profile.team || "?").trim().charAt(0).toUpperCase();
+  return (
+    <button
+      type="button"
+      onClick={onProfile}
+      className="group mt-4 flex w-full items-center gap-3 rounded-lg border border-zinc-800 px-3 py-2.5 text-left transition-colors hover:border-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      aria-label={tr("Мой профиль: команда и роль")}
+      title={empty ? tr("Моя команда и роль") : [profile.team, profile.teamName, profile.name, roleLabel(profile.role)].filter(Boolean).join(" · ")}
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-900 text-sm font-semibold text-zinc-200">
+        {empty ? <UserRound size={16} aria-hidden="true" /> : initial}
+      </span>
+      <span className="min-w-0 flex-1">
+        {empty ? (
+          <>
+            <span className="block text-sm font-medium text-zinc-100">{tr("Моя команда и роль")}</span>
+            <span className="block text-[11px] text-zinc-500">{tr("Укажите, чтобы AI и расписание знали вас")}</span>
+          </>
+        ) : (
+          <>
+            <span className="block truncate text-sm font-medium text-zinc-100">
+              {profile.team ? <span className="num">{profile.team}</span> : tr("Команда не выбрана")}
+              {profile.teamName ? <span className="font-normal text-zinc-500"> {profile.teamName}</span> : null}
+            </span>
+            <span className="block truncate text-[11px] text-zinc-500">{[profile.name, roleLabel(profile.role) || tr("роль не указана")].filter(Boolean).join(" · ")}</span>
+          </>
+        )}
+      </span>
+      <ChevronRight size={14} className="shrink-0 text-zinc-600 group-hover:text-zinc-300" aria-hidden="true" />
+    </button>
+  );
+}
+
+function Sidebar({ lang, page, go, event, onEvent, onClose, profile, onProfile }) {
   return (
     <div className="flex h-full flex-col">
       <div className="mb-6 flex items-center justify-between">
@@ -81,11 +118,12 @@ function Sidebar({ lang, page, go, event, onEvent, onClose }) {
           );
         })}
       </nav>
+      <ProfileCard profile={profile} onProfile={onProfile} />
     </div>
   );
 }
 
-export default function Layout({ page, go, event, onEvent, onScout, lang, saveState, allowStorage, children }) {
+export default function Layout({ page, go, event, onEvent, onScout, lang, saveState, allowStorage, profile, onProfile, children }) {
   const [menu, setMenu] = useState(false);
   const title = page === "legal" ? t(lang, "nav_legal") : label(lang, page);
 
@@ -108,7 +146,7 @@ export default function Layout({ page, go, event, onEvent, onScout, lang, saveSt
       </a>
       <div className="lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
         <aside className="sticky top-0 hidden h-screen flex-col overflow-y-auto border-r border-zinc-900 px-3 py-5 lg:flex">
-          <Sidebar lang={lang} page={page} go={go} event={event} onEvent={onEvent} />
+          <Sidebar lang={lang} page={page} go={go} event={event} onEvent={onEvent} profile={profile} onProfile={onProfile} />
         </aside>
 
         {menu ? <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden" onClick={() => setMenu(false)} aria-hidden="true" /> : null}
@@ -117,7 +155,7 @@ export default function Layout({ page, go, event, onEvent, onScout, lang, saveSt
           aria-hidden={!menu}
           inert={menu ? undefined : ""}
         >
-          <Sidebar lang={lang} page={page} go={goAndClose} event={event} onEvent={() => { setMenu(false); onEvent(); }} onClose={() => setMenu(false)} />
+          <Sidebar lang={lang} page={page} go={goAndClose} event={event} onEvent={() => { setMenu(false); onEvent(); }} onClose={() => setMenu(false)} profile={profile} onProfile={() => { setMenu(false); onProfile(); }} />
         </div>
 
         <div className="flex min-h-screen min-w-0 flex-col">

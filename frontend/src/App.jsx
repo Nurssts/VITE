@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import Layout, { NAV } from "./components/Layout";
 import { FeedbackHost, toast } from "./components/feedback";
 import { PageSkeleton } from "./components/ui";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ProfileModal from "./components/ProfileModal";
 import { AgeGate, CookieBanner } from "./app/Consent";
 import { EventSelect, LangSelect } from "./app/Onboarding";
 import { useRoute } from "./app/router";
@@ -36,6 +37,7 @@ export default function App() {
   const { prefs, setPrefs, lang, db, setDb, allowStorage, saveState } = state;
   const [route, go] = useRoute();
   const page = route.page;
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // AI chats and memory follow the same storage consent as scouting data.
   useEffect(() => aiStore.setPersist(allowStorage), [allowStorage]);
@@ -55,7 +57,10 @@ export default function App() {
   }, [go]);
 
   const Page = pages[page] || pages.overview;
-  const ctx = useMemo(() => ({ db, setDb, lang, go, route, prefs, setPrefs, saveState, allowStorage }), [db, setDb, lang, go, route, prefs, setPrefs, saveState, allowStorage]);
+  const openProfile = () => setProfileOpen(true);
+  const ctx = useMemo(() => ({ db, setDb, lang, go, route, prefs, setPrefs, saveState, allowStorage, openProfile }), [db, setDb, lang, go, route, prefs, setPrefs, saveState, allowStorage]);
+  const myTeam = db.teams.find((t) => t.number === prefs.myTeam);
+  const profile = { team: prefs.myTeam || "", teamName: myTeam?.name || "", role: prefs.myRole || "", name: prefs.displayName || "" };
 
   if (!prefs.lang) {
     return (
@@ -98,6 +103,8 @@ export default function App() {
         onScout={() => go("scouting")}
         saveState={saveState}
         allowStorage={allowStorage}
+        profile={profile}
+        onProfile={openProfile}
       >
         <ErrorBoundary key={page} lang={lang}>
           <Suspense fallback={<PageSkeleton />}>
@@ -113,6 +120,8 @@ export default function App() {
           onDecide={(storage) => setPrefs((p) => ({ ...p, cookie: { decided: true, storage, shownAt: new Date().toISOString() } }))}
         />
       ) : null}
+
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} prefs={prefs} setPrefs={setPrefs} teams={db.teams} />
 
       {!prefs.age.confirmed ? <AgeGate lang={lang} onConfirm={(age) => setPrefs((p) => ({ ...p, age }))} /> : null}
 
