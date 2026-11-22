@@ -11,6 +11,18 @@ import { tr } from "../lib/i18n";
 const P = gameConfig.points;
 const STATION_KEY = "vite-scout-station";
 
+// Human names of form fields (for "AI is unsure about …"). Built lazily so tr() sees the current language.
+const FIELD_LABELS = new Proxy({}, {
+  get: (_, k) =>
+    ({
+      teamNumber: tr("Команда"), matchNo: tr("Номер матча"), autoLeave: tr("Робот покинул стену · 3 очка"), autoPark: tr("Парковка Auto · 5 очков"),
+      autoHiveTips: tr("HIVE TIP в Auto"), teleopHiveTips: "HIVE TIP TeleOp", cellItems: tr("Элементы в CELL"), flowerPlaced: tr("FLOWER размещено роботом"),
+      ownedFlowerItems: tr("Элементы в принадлежащих FLOWER"), bottomNectar: tr("Бонусы нижний NECTAR"), gardenItems: tr("GARDEN элементы"),
+      teleopPark: tr("Парковка TeleOp · 5 очков"), penalties: "MINOR FOUL", disabled: tr("Робот отключался (DNF / disabled)"),
+      autoTrajectory: tr("Траектория автонома"), confidence: tr("Уверенность"),
+    })[k],
+});
+
 const blank = {
   autoLeave: false, autoPark: false, teleopPark: false, disabled: false,
   autoHiveTips: 0, teleopHiveTips: 0, cellItems: 0, flowerPlaced: 0, ownedFlowerItems: 0, bottomNectar: 0, gardenItems: 0, penalties: 0,
@@ -172,7 +184,7 @@ export default function Scouting({ db, setDb, go, route }) {
           {aiNote.unknownTeam ? <Badge tone="strong">{tr("Команды нет в списке")}: {aiNote.unknownTeam}</Badge> : null}
           {aiNote.uncertain.length ? (
             <span className="text-zinc-400">
-              {tr("Не уверен")}: {aiNote.uncertain.join(", ")}
+              {tr("Не уверен")}: {aiNote.uncertain.map((k) => FIELD_LABELS[k] || k).join(", ")}
             </span>
           ) : null}
           <button type="button" className="ml-auto text-xs text-zinc-500 hover:text-white" onClick={() => setAiNote(null)}>

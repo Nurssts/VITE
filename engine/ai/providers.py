@@ -240,7 +240,8 @@ class OpenAICompatProvider:
                 async with client.stream("POST", f"{self.base_url}/chat/completions", json=body, headers=headers) as res:
                     if res.status_code >= 400:
                         detail = (await res.aread()).decode("utf-8", "replace")[:300]
-                        auth = res.status_code in (401, 403)
+                        # Gemini answers 400 "API key not valid" instead of 401
+                        auth = res.status_code in (401, 403) or (res.status_code == 400 and "api key" in detail.lower())
                         raise ProviderError(
                             f"{self.id} returned HTTP {res.status_code}" + ("" if auth else f": {_short(detail)}"),
                             retryable=res.status_code == 429 or res.status_code >= 500,

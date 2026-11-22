@@ -82,7 +82,7 @@ function Message({ m, results, threadId, index, feedback, onCopy }) {
   if (m.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-white px-4 py-2.5 text-sm text-black">{m.display || m.text}</div>
+        <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-white px-4 py-2.5 text-sm text-black">{m.display || m.text}</div>
       </div>
     );
   }
@@ -90,7 +90,7 @@ function Message({ m, results, threadId, index, feedback, onCopy }) {
   const key = `${threadId}:${index}`;
   const fb = feedback[key];
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       {m.toolCalls?.length ? (
         <div className="grid min-w-0 gap-1.5">
           {m.toolCalls.map((c) => (
@@ -374,9 +374,9 @@ ${langLine}`, display: title, ts: Date.now() }];
   return (
     <div>
       {header}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="flex min-h-[60vh] flex-col rounded-xl border border-zinc-800/80 bg-zinc-950" aria-label={tr("Диалог")}>
-          <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5" aria-live="polite">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="flex min-h-[60vh] min-w-0 flex-col rounded-xl border border-zinc-800/80 bg-zinc-950" aria-label={tr("Диалог")}>
+          <div className="min-w-0 flex-1 space-y-5 overflow-y-auto break-words p-4 sm:p-5" aria-live="polite">
             {!messages.length ? (
               <div className="py-6">
                 <p className="text-sm text-zinc-400">{tr("Выберите задачу — агент сам соберёт данные и проведёт анализ:")}</p>

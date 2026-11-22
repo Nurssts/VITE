@@ -170,7 +170,7 @@ export async function storageEstimate() {
 }
 
 export function wipeAll() {
-  for (const key of [STORE_KEY, PREFS_KEY]) {
+  for (const key of [STORE_KEY, PREFS_KEY, "vite-ai-v1"]) { // vite-ai-v1 = AI chats and memory (lib/ai/memory.js)
     try {
       localStorage.removeItem(key);
     } catch {
