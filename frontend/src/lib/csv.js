@@ -23,7 +23,7 @@ export function unguard(s) {
 
 /** RFC-4180-ish parser. Returns objects keyed by the header row. Handles BOM, CRLF, quotes, ; delimiter. */
 export function parseCSV(text) {
-  const src = String(text || "").replace(/^﻿/, "");
+  const src = String(text || "").replace(/^\ufeff/, "");
   const firstLine = src.split(/\r?\n/, 1)[0] || "";
   const delim = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ";" : ",";
   const out = [];
@@ -62,7 +62,7 @@ export function bool(v) {
 
 /** Save text as a file (with UTF-8 BOM for CSV so Excel shows Cyrillic). */
 export function download(name, text, type = "text/plain") {
-  const body = type.startsWith("text/csv") ? "﻿" + text : text;
+  const body = type.startsWith("text/csv") ? "\ufeff" + text : text;
   const blob = new Blob([body], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

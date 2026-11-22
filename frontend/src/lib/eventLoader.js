@@ -18,12 +18,16 @@ export function fromFirst(x) {
 export async function loadEventTeams(season, code) {
   const c = String(code || "").trim();
   const errors = [];
-  try {
-    const d = await api.firstTeams(season, c);
-    const teams = (d.teams || []).map(fromFirst).filter((t) => t.number);
-    if (teams.length) return { source: "FIRST", teams };
-  } catch (e) {
-    errors.push(`FIRST: ${e.message}`);
+  // Ask FIRST only when the server has credentials (saves a failing request and ~1s).
+  const health = await api.health().catch(() => null);
+  if (health?.official_api_configured !== false) {
+    try {
+      const d = await api.firstTeams(season, c);
+      const teams = (d.teams || []).map(fromFirst).filter((t) => t.number);
+      if (teams.length) return { source: "FIRST", teams };
+    } catch (e) {
+      errors.push(`FIRST: ${e.message}`);
+    }
   }
   try {
     const d = await api.eventTeamsScout(season, c);

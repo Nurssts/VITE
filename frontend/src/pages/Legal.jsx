@@ -1,23 +1,24 @@
 import { tr } from "../lib/i18n";
 import { useState } from "react";
-import { Panel } from "../components/ui";
+import { PageHeader, Panel } from "../components/ui";
 
+// Titles are translated at render time (module-level tr() would freeze the first language).
 const SECTIONS = [
-  { id: "privacy", title: tr("Политика конфиденциальности") },
-  { id: "terms", title: tr("Условия использования") },
-  { id: "refund", title: tr("Политика возврата") },
+  { id: "privacy", title: "Политика конфиденциальности" },
+  { id: "terms", title: "Условия использования" },
+  { id: "refund", title: "Политика возврата" },
   { id: "cookies", title: "Cookie Policy" },
-  { id: "sdk", title: tr("Сторонние API и SDK") },
+  { id: "sdk", title: "Сторонние API и SDK" },
 ];
 
 export default function Legal() {
   const [tab, setTab] = useState("privacy");
+  const sections = SECTIONS.map((s) => ({ ...s, title: tr(s.title) }));
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">{tr("Правовая информация")}</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-500">{tr("Короткие, проверяемые формулировки. Нет скрытых согласий и заранее отмеченных галочек.")}</p>
+      <PageHeader title={tr("Правовая информация")} subtitle={tr("Короткие, проверяемые формулировки. Нет скрытых согласий и заранее отмеченных галочек.")} />
       <div className="mb-4 flex flex-wrap gap-2">
-        {SECTIONS.map((s) => (
+        {sections.map((s) => (
           <button key={s.id} type="button" onClick={() => setTab(s.id)} className={`rounded-full border px-3 py-1 text-xs ${tab === s.id ? "border-white bg-white text-black" : "border-zinc-800 text-zinc-400"} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400`} aria-label={`${tr("Показать")} ${s.title}`}>
             {s.title}
           </button>
@@ -61,7 +62,8 @@ export default function Legal() {
             <li>{tr("FIRST FTC Events API — официальные ивенты, команды, результаты. Ключи только на сервере. Условия: ftc-events.firstinspires.org.")}</li>
             <li>{tr("The Orange Alliance API — опциональный импорт матчей. Ключ TOA_API_KEY только на сервере.")}</li>
             <li>{tr("Google Gemini AI — опциональный AI-анализ матчей и рекомендаций партнёров (включён по умолчанию). Скаутские заметки и данные команд отправляются в Google при использовании AI-функций. Не вводите личные данные, особенно данные несовершеннолетних.")}</li>
-            <li>{tr("Inter (SIL Open Font License) — шрифт интерфейса.")}</li>
+            <li>{tr("FTCScout.org GraphQL API — публичные ивенты, расписания, результаты и рейтинги. Запросы идут через сервер VITE, ключ не нужен.")}</li>
+            <li>{tr("Inter (SIL Open Font License) — шрифт интерфейса, поставляется вместе с приложением (без запросов к Google Fonts).")}</li>
             <li>{tr("Lucide Icons (ISC) — векторные иконки.")}</li>
             <li>{tr("Не используются: Google Analytics, рекламные SDK, платёжные SDK, session replay.")}</li>
           </ul>
