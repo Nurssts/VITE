@@ -1,16 +1,27 @@
 # VITE · BioBuzz Alliance Matrix
 
-Интеллектуальный хаб скаутинга и драфта альянсов для сезона FTC BIOBUZZ: роли Hive / Flower, Autonomous Collision Check, Monte-Carlo и доска драфта. Интерфейс монохромный, mobile-first, без рекламы и скрытых платежей.
+Офлайн-скаутинг и драфт альянсов для сезона FTC **BIOBUZZ 2026–2027**: запись матчей с трибуны,
+официальное расписание и результаты, прогноз матчей (скаутинг + OPR), синергия ролей Hive / Flower,
+Autonomous Collision Check, Монте-Карло и доска драфта. Монохромный интерфейс, mobile-first,
+без рекламы и трекеров. Данные скаутинга остаются на устройстве.
 
-## Стек
+## Возможности
 
-- Frontend: React + Vite + Tailwind CSS + Lucide + Recharts
-- Backend: FastAPI (синергия, симуляции, прокси FIRST Events API, The Orange Alliance, FTCScout.org)
-- Хранение: localStorage + IndexedDB на устройстве, опционально SQLite-кэш симуляций
+- **Скаутинг** — крупные кнопки +/−, живой подсчёт очков, режим «моя позиция» (R1/R2/B1/B2):
+  команда подставляется из официального расписания, после сохранения — следующий матч.
+- **Матчи** — расписание и результаты ивента (FTCScout, без ключа), прогноз каждого матча,
+  лидеры OPR, проверка точности модели на сыгранных матчах.
+- **Команды** — рейтинг, профили с историей матчей, заметками, OPR и официальными победами.
+- **Синергия** — индекс пары, collision check, Монте-Карло с интервалом неопределённости, подбор партнёра.
+- **Драфт** — сортировка по синергии с капитаном, denial pick, отметки «взяли».
+- **Обмен данными** — JSON/CSV; файлы нескольких скаутов объединяются без дублей.
+- **Отчёты** — печатный отчёт по команде, рейтинг, Engineering Notebook (PDF через печать).
+- **Офлайн** — PWA, localStorage + резервная копия в IndexedDB, работа без интернета после загрузки.
+- Русский и английский интерфейс.
 
 ## Быстрый запуск
 
-### Только интерфейс (Vite)
+### Только интерфейс (демо-данные работают без сервера)
 
 ```powershell
 cd frontend
@@ -18,7 +29,7 @@ npm install
 npm run dev
 ```
 
-Откройте `http://127.0.0.1:5173`. Демо-скаутинг работает без сервера.
+Откройте `http://127.0.0.1:5173`. Для живых данных запустите и сервер (ниже) — Vite проксирует `/api`.
 
 ### Полный стек (API + собранный UI)
 
@@ -35,70 +46,53 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 
 Откройте `http://127.0.0.1:8000`.
 
-## API интеграции
-
-### FTCScout.org (бесплатно, без ключа)
-- Публичный GraphQL API команд, рейтингов и матчей
-- Эндпойнты: `/api/ftcscout/teams`, `/api/ftcscout/events`, `/api/ftcscout/rankings`
-- Аутентификация не требуется
-
-### FIRST Events API (опционально)
-Ключи **только** в окружении процесса, не в браузере:
+## Проверки
 
 ```powershell
-$env:FTC_API_USERNAME = "ваш-логин"
-$env:FTC_API_TOKEN = "ваш-токен"
+cd frontend
+npm run check          # ESLint + Vitest + production build
 ```
 
-FIRST просит ссылаться на API и запрещает коммерческое использование его данных: [регистрация](https://ftc-events.firstinspires.org/services/API/register).
-
-### The Orange Alliance API (опционально)
 ```powershell
-$env:TOA_API_KEY = "ключ-toa"
+py -3 -m pip install -r requirements-dev.txt
+py -3 -m pytest -q     # тесты API (без сети)
 ```
-TOA: [документация](https://theorangealliance.org/apidocs).
 
-## Модули
+## Источники данных
 
-1. Ручной скаутинг и CSV (циклы Pollen/Nectar, Hive success, Flowers, парковка, траектория автонома).
-2. Индекс синергии: покрытие профилей + комплиментарность Hive/Flower − DNF − collision.
-3. Monte-Carlo ≥1000 итераций, 95% интервал, текстовые узкие места.
-4. Live draft: лучший синергетический пик и denial pick.
-5. Engineering Notebook: печать в системный PDF для судей.
+| Источник | Ключ | Что даёт |
+|---|---|---|
+| FTCScout.org GraphQL | не нужен | ивенты, составы, расписание, результаты, рейтинги |
+| FIRST FTC Events API | `FTC_API_USERNAME`, `FTC_API_TOKEN` | официальные составы (приоритетный источник, если ключ задан) |
+| The Orange Alliance | `TOA_API_KEY` | проверка матчей TOA |
+| Google Gemini | `GOOGLE_API_KEY` (+ `AI_ENABLED`, `GEMINI_MODEL`, `AI_DAILY_LIMIT`) | AI-эндпоинты сервера |
 
-Учебный набор из 12 команд явно помечен. Фейковых отзывов и неподтверждённых процентов нет.
+Ключи задаются **только** в окружении сервера и никогда не передаются в браузер.
+FIRST запрещает коммерческое использование данных: [регистрация API](https://ftc-events.firstinspires.org/services/API/register).
 
-## Модель и границы
+Параметр `season` везде — **год начала сезона** (2026 = BIOBUZZ 2026–2027).
 
-Модель собрана по BIOBUZZ Competition Manual TU05 (15.10.2026). Это оценка наблюдаемого вклада робота, не официальный счёт альянса. Защита, конкуренция за элементы и решения судей моделируются не полностью.
+## Модель
 
-## Деплой на бесплатный хостинг
+Оценка вклада робота считается по BIOBUZZ Competition Manual TU05 (15.10.2026), см.
+`frontend/src/config/game.biobuzz.js`. Это оценка наблюдаемого вклада, а не официальный счёт.
+Малые выборки подтягиваются к среднему по ивенту (байесовское сжатие), поэтому один удачный матч
+не делает команду лидером. OPR считается по официальным счетам альянсов. Подробности —
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-### Рекомендуемый: Render (Frontend + Backend вместе)
-1. Зарегистрируйтесь на [render.com](https://render.com)
-2. Создайте Web Service → подключите GitHub репозиторий
-3. Render автоматически деплоит по `render.yaml`
-4. После деплоя сайт будет доступен по URL типа `https://vite-biobuzz.onrender.com`
-5. Все изменения в GitHub автоматически деплоятся на Render
+## Деплой (Render)
 
-### Переменные окружения (опционально):
-В настройках Render Service → Environment Variables:
-- `FTC_API_USERNAME` - для FIRST Events API
-- `FTC_API_TOKEN` - для FIRST Events API
-- `TOA_API_KEY` - для The Orange Alliance API
-- `GOOGLE_API_KEY` - для Gemini AI анализа матчей (получить на [AI Studio](https://makersuite.google.com/app/apikey))
-
-### GitHub Pages (альтернатива для frontend только):
-Если нужен только frontend без backend:
-1. В репозитории GitHub: Settings → Pages
-2. Source: GitHub Actions
-3. Автоматический деплой при push в main
-4. Сайт: `https://nurssts.github.io/VITE/`
+1. Render → New → Blueprint → репозиторий GitHub (конфигурация в `render.yaml`).
+2. При необходимости задайте ключи в Environment Variables.
+3. Каждый push в `main` автоматически деплоится; CI (`.github/workflows/test.yml`) проверяет фронтенд и API.
 
 ## Правовое
 
-В приложении: Privacy Policy, Terms, Refund Policy (платежей внутри продукта нет), Cookie banner без тёмных паттернов, перечень SDK, возрастное согласие 13+/наставник, удаление всех локальных данных.
+В приложении: Privacy Policy, Terms, Refund Policy (платежей нет), cookie-баннер без тёмных паттернов,
+перечень SDK, возрастное согласие 13+/наставник, полное удаление локальных данных.
 
 ## Горячие клавиши
 
-`1`–`9` — разделы, `Tab` — фокус, `Esc` — закрыть диалоги.
+`1`–`9` — разделы, `Esc` — закрыть окно, `↑`/`↓`/`Enter` — выбор в поиске ивентов.
+
+История изменений — [CHANGELOG.md](CHANGELOG.md).

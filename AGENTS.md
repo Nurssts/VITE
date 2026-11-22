@@ -6,7 +6,12 @@
 - `server.py` - FastAPI backend (API proxies for FIRST, TOA, FTCScout, Gemini)
 - `engine/` - Backend modules (FTCScout GraphQL client, Gemini AI)
 - `frontend/src/lib/model.js` - **Single source of truth** for all math (synergy, Monte Carlo, statistics)
-- `frontend/src/lib/store.js` - LocalStorage + IndexedDB persistence
+- `frontend/src/lib/db.js` - DB schema v3, validation/migration, pure operations (add/update/delete/merge)
+- `frontend/src/lib/store.js` - LocalStorage + IndexedDB persistence (IDB = recovery copy)
+- `frontend/src/lib/api.js` - The only HTTP client (timeouts, cold-start retries, dedupe)
+- `frontend/src/app/` - App state hook, hash router, onboarding, consent overlays
+- `frontend/src/components/ui.jsx` - Design system; `feedback.jsx` - global toast/confirm
+- `docs/ARCHITECTURE.md` - Architecture overview (keep it current)
 - `frontend/src/lib/i18n.js` - Translations (Russian/English)
 - `render.yaml` - Render deployment configuration
 
@@ -40,7 +45,9 @@
 
 ### 2. Model.js Changes
 - **DO NOT** change without updating all consumers
-- Consumers: `store.js`, `Scouting.jsx`, `Teams.jsx`, `Analysis.jsx`, `Draft.jsx`, `Notebook.jsx`
+- Consumers: `store.js`, `exportCsv.js`, `Overview.jsx`, `Scouting.jsx`, `Matches.jsx`, `Teams.jsx`, `Analysis.jsx`, `Draft.jsx`, `Notebook.jsx`, `TeamReport.jsx`, `RankingReport.jsx`
+- `stats()` is memoised per `db.records` array: never mutate a db in place in app code, always
+  return a new object (use the helpers in `lib/db.js`)
 - Run `grep -rn "from.*model"` in `frontend/src` to find all imports
 - After changes: run `npm test` and `npm run build`
 
@@ -76,13 +83,16 @@
 cd frontend
 npm install
 npm run dev        # http://127.0.0.1:5173
-npm test          # Vitest tests
-npm run build     # Production build
+npm run lint       # ESLint
+npm test           # Vitest (lib + component tests; i18n coverage test included)
+npm run build      # Production build
+npm run check      # all three
 ```
 
 ### Backend
 ```bash
-py -3 -m pip install -r requirements.txt
+py -3 -m pip install -r requirements-dev.txt
+py -3 -m pytest -q
 py -3 -m uvicorn server:app --host 127.0.0.1 --port 8000
 curl http://127.0.0.1:8000/api/health
 ```
@@ -113,9 +123,18 @@ If game rules change for a new season:
 - Ensure focus-visible states on all buttons/inputs
 - Legal/privacy components in `Legal.jsx` must stay up to date
 
+## Conventions
+
+- `season` everywhere = year the season STARTS (2026 = BIOBUZZ 2026-2027): frontend, server, FIRST, FTCScout
+- UI strings: write Russian in `tr("...")` and add the English to `src/lib/en-ui.js`;
+  `src/lib/i18n.test.js` fails if a translation is missing
+- Never call `tr()` at module level (it freezes the first language)
+- Feedback: `toast()` / `confirmDialog()` from `components/feedback.jsx`, not `alert`/`confirm`
+- Every imported file goes through `migrateDb` / `normalizeRecord`
+
 ## Current Known Limitations
 
-- FTCScout GraphQL uses `eventsOnDate` (verified working)
+- FTCScout GraphQL: events via `eventsSearch`, schedule/results via `eventByCode { matches }`
+  (score fragment is season specific: `MatchScores2026`)
 - Gemini AI backend exists but not connected to UI (user explicitly said not needed)
-- Russian strings still exist in some pages (Data.jsx, Scouting.jsx, etc.) - needs cleanup
-- PWA/Service Worker not yet implemented (manual service-worker.js in legacy/)
+- `legacy/` is the old vanilla-JS version, not served; kept for reference only
