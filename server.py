@@ -243,9 +243,9 @@ async def sdk_inventory() -> dict[str, Any]:
     if ai_enabled:
         from engine.ai.service import provider_configs
 
-        for prov in provider_configs():
+        if provider_configs():  # one neutral entry, no provider names
             third_party.append({
-                "name": f"{prov['label']} ({prov['model']})",
+                "name": "External AI model service (configured on the server)",
                 "purpose": "VITE Strategist and dictation (set AI_ENABLED=false to disable).",
                 "data": "Only your messages and the data the AI reads with its tools (team stats, schedule, scout notes) are sent, and only when you use AI. Do not enter personal data, especially of minors.",
                 "url": "", "required": False,

@@ -137,9 +137,10 @@ def status() -> dict[str, Any]:
     return {
         "enabled": ai_enabled(),
         "configured": bool(configs),
-        "providers": [{"id": c["id"], "label": c["label"], "model": c["model"], "healthy": USAGE.healthy(c["id"])} for c in configs],
-        "active": next((c["id"] for c in configs if USAGE.healthy(c["id"])), None),
-        "usage": USAGE.snapshot(),
+        # Provider and model names are intentionally not exposed (server logs have them).
+        "providers": len(configs),
+        "available": any(USAGE.healthy(c["id"]) for c in configs),
+        "usage": {k: v for k, v in USAGE.snapshot().items() if k != "byProvider"},
         "tools": public_list(),
         "missions": missions_public(),
     }
@@ -170,7 +171,7 @@ async def run_turn(system: str, messages: list[dict[str, Any]], tools: list[dict
         for attempt in range(2):
             started = False
             try:
-                yield {"type": "start", "provider": cfg["id"], "label": cfg["label"], "model": cfg["model"]}
+                yield {"type": "start", "attempt": attempt + 1}
                 req = TurnRequest(system=system, messages=messages, tools=tools, max_tokens=_max_tokens(cfg["id"]), json_mode=json_mode)
                 async for event in provider.stream_turn(req):
                     if event["type"] in ("text", "tool_call"):
@@ -181,7 +182,7 @@ async def run_turn(system: str, messages: list[dict[str, Any]], tools: list[dict
                 return
             except ProviderError as exc:
                 last = exc
-                log.warning("AI provider %s failed (attempt %d): %s", cfg["id"], attempt + 1, exc)
+                log.warning("AI provider %s (%s) failed (attempt %d): %s | %s", cfg["id"], cfg["model"], attempt + 1, exc, exc.detail)
                 if exc.auth:
                     USAGE.mark_unhealthy(cfg["id"], 600)
                 if started:

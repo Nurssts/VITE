@@ -4,7 +4,6 @@ export const EN_UI = {
   "12 вымышленных команд с пометкой «демо» будут добавлены к текущим данным.": "12 fictional teams marked “demo” will be added to your current data.",
   "FIRST Events API (если ключ задан на сервере) с резервом FTCScout — без ключа.": "FIRST Events API (if a key is set on the server), with FTCScout as a keyless fallback.",
   "FTCScout.org GraphQL API — публичные ивенты, расписания, результаты и рейтинги. Запросы идут через сервер VITE, ключ не нужен.": "FTCScout.org GraphQL API — public events, schedules, results and rankings. Requests go through the VITE server; no key needed.",
-  "Google Gemini AI — опциональный AI-анализ матчей и рекомендаций партнёров (включён по умолчанию). Скаутские заметки и данные команд отправляются в Google при использовании AI-функций. Не вводите личные данные, особенно данные несовершеннолетних.": "Google Gemini AI — optional AI match analysis and partner recommendations (on by default on the server). Scout notes and team data are sent to Google when AI features are used. Do not enter personal data, especially of minors.",
   "Inter (SIL Open Font License) — шрифт интерфейса, поставляется вместе с приложением (без запросов к Google Fonts).": "Inter (SIL Open Font License) — the interface font, bundled with the app (no requests to Google Fonts).",
   "OPR, ретроспективно": "OPR, in hindsight",
   "VITE загрузит список команд события. Скаутинг потом работает без интернета.": "VITE loads the event's team list. Scouting then works without internet.",

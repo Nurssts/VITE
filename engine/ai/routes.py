@@ -126,7 +126,7 @@ def build_router(limiter) -> APIRouter:
             try:
                 async for event in ai.run_turn(system, messages, [], json_mode=True):
                     if event["type"] == "start":
-                        meta = {"provider": event["provider"], "model": event["model"]}
+                        meta = {}
                         text = ""
                     elif event["type"] == "text":
                         text += event["delta"]

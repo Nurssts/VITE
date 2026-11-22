@@ -55,7 +55,7 @@ DONE = {"type": "done", "stop": "end", "usage": {"input": 10, "output": 5}, "raw
 
 def test_status_without_configuration(client):
     s = client.get("/api/ai/status").json()
-    assert s["enabled"] and not s["configured"] and s["active"] is None
+    assert s["enabled"] and not s["configured"] and s["available"] is False and s["providers"] == 0
     assert {"get_team", "add_observation"} <= {t["name"] for t in s["tools"]}
     assert any(m["id"] == "picklist" for m in s["missions"])
 
@@ -91,7 +91,7 @@ def test_fallback_to_next_provider_before_output(client, monkeypatch):
     use(monkeypatch, bad, good)
     ev = events(client.post("/api/ai/chat", json=USER))
     assert bad.calls == 2  # one retry
-    assert ev[-1]["type"] == "done" and [e["provider"] for e in ev if e["type"] == "start"][-1] == "good"
+    assert ev[-1]["type"] == "done" and good.calls == 1
 
 
 def test_auth_failure_marks_provider_unhealthy(client, monkeypatch):
@@ -171,3 +171,16 @@ def test_anthropic_message_conversion():
     assert msgs[1]["content"][1] == {"type": "tool_use", "id": "t1", "name": "get_team", "input": {"team": "1"}}
     assert msgs[2]["content"][0]["type"] == "tool_result" and msgs[2]["content"][0]["tool_use_id"] == "t1"
     assert msgs[3]["content"][0]["type"] == "thinking"  # thinking blocks are echoed unchanged
+
+
+def test_provider_and_model_names_are_never_exposed(client, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "k-123")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-test-model")
+    status = json.dumps(client.get("/api/ai/status").json()).lower()
+    sdk = json.dumps(client.get("/api/sdk").json()).lower()
+    assert "gemini" not in status and "gemini" not in sdk and "google" not in status
+    bad = FakeProvider("gemini", [ProviderError("The AI service timed out.", retryable=True, detail="gemini timeout")])
+    use(monkeypatch, bad)
+    ev = events(client.post("/api/ai/chat", json=USER))
+    assert "gemini" not in json.dumps(ev).lower()
+    assert ev[-1]["type"] == "error" and "AI service" in ev[-1]["message"]

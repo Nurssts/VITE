@@ -35,7 +35,7 @@ export function wireMessages(messages) {
  * @param {object} o
  * @param {object[]} o.messages     conversation so far (ends with the new user message)
  * @param {(messages: object[]) => void} o.onMessages  called with the updated conversation (live)
- * @param {(e: object) => void} [o.onStatus]  {phase: thinking|tool|confirm|done, tool?, provider?, model?}
+ * @param {(e: object) => void} [o.onStatus]  {phase: thinking|tool|confirm|done, tool?}
  * @param {(call: object) => Promise<boolean>} o.confirm  ask the user to approve an action tool
  * @param {{kind: Function, run: Function}} o.toolbox
  * @param {object} o.request         {context, memory, lang}
@@ -66,8 +66,8 @@ export async function runAgent({ messages, onMessages, onStatus, confirm, toolbo
         onEvent(e) {
           if (e.type === "start") {
             // provider (re)started — e.g. after a fallback: discard any partial output
-            assistant = { ...assistant, text: "", toolCalls: [], provider: e.label || e.provider, model: e.model };
-            onStatus?.({ phase: "thinking", step, provider: e.label || e.provider, model: e.model });
+            assistant = { ...assistant, text: "", toolCalls: [] };
+            onStatus?.({ phase: "thinking", step });
           } else if (e.type === "text") assistant = { ...assistant, text: assistant.text + e.delta };
           else if (e.type === "tool_call") assistant = { ...assistant, toolCalls: [...assistant.toolCalls, { id: e.id, name: e.name, args: e.args || {} }] };
           else if (e.type === "done") {
