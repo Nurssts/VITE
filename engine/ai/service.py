@@ -13,6 +13,8 @@ Configuration is read from the environment on every call (no restart needed in t
   AI_MAX_OUTPUT_TOKENS  per model turn (default 4096; Claude gets at least 8000)
   AI_DAILY_LIMIT        model turns per day for the whole server (default 400)
   AI_DAILY_TOKEN_LIMIT  input+output tokens per day (default 3,000,000)
+  AI_PER_IP_DAILY_LIMIT model turns per day for one client address (default 150), so one
+                        visitor cannot use up the whole server budget
   AI_TIMEOUT            seconds per model turn (default 90)
 """
 from __future__ import annotations
@@ -83,23 +85,30 @@ class Usage:
         self.input = 0
         self.output = 0
         self.by_provider: dict[str, dict[str, int]] = {}
+        self.by_client: dict[str, int] = {}
         self.unhealthy_until: dict[str, float] = {}
 
     def _roll(self) -> None:
         today = date.today().isoformat()
         if self.day != today:
-            self.day, self.turns, self.input, self.output, self.by_provider = today, 0, 0, 0, {}
+            self.day, self.turns, self.input, self.output, self.by_provider, self.by_client = today, 0, 0, 0, {}, {}
 
-    def check(self) -> None:
+    def check(self, client: str = "") -> None:
         self._roll()
+        if client and self.by_client.get(client, 0) >= _int("AI_PER_IP_DAILY_LIMIT", 150):
+            raise ProviderError("You reached today's AI limit for this device. It resets tomorrow.", status=429)
         if self.turns >= _int("AI_DAILY_LIMIT", 400):
             raise ProviderError("Daily AI request limit reached. AI is available again tomorrow.", status=429)
         if self.input + self.output >= _int("AI_DAILY_TOKEN_LIMIT", 3_000_000):
             raise ProviderError("Daily AI token budget reached. AI is available again tomorrow.", status=429)
 
-    def add(self, provider: str, usage: dict[str, int]) -> None:
+    def add(self, provider: str, usage: dict[str, int], client: str = "") -> None:
         self._roll()
         self.turns += 1
+        if client:
+            if client not in self.by_client and len(self.by_client) > 50_000:
+                self.by_client.clear()  # memory bound; counters restart (budget still applies)
+            self.by_client[client] = self.by_client.get(client, 0) + 1
         self.input += usage.get("input", 0)
         self.output += usage.get("output", 0)
         p = self.by_provider.setdefault(provider, {"turns": 0, "input": 0, "output": 0})
@@ -151,7 +160,7 @@ def _max_tokens(provider_id: str) -> int:
     return max(base, 8000) if provider_id == "anthropic" else base  # Claude thinks before answering
 
 
-async def run_turn(system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, json_mode: bool = False) -> AsyncIterator[dict[str, Any]]:
+async def run_turn(system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, json_mode: bool = False, client: str = "") -> AsyncIterator[dict[str, Any]]:
     """One model turn with retries and provider fallback.
 
     A provider is retried once on transient errors; if it still fails BEFORE producing any
@@ -163,7 +172,7 @@ async def run_turn(system: str, messages: list[dict[str, Any]], tools: list[dict
     configs = [c for c in provider_configs() if USAGE.healthy(c["id"])] or provider_configs()
     if not configs:
         raise ProviderError("AI is not configured on this server. Set GOOGLE_API_KEY, ANTHROPIC_API_KEY or AI_OPENAI_BASE_URL.", status=503)
-    USAGE.check()
+    USAGE.check(client)
 
     last: ProviderError | None = None
     for cfg in configs:
@@ -177,7 +186,7 @@ async def run_turn(system: str, messages: list[dict[str, Any]], tools: list[dict
                     if event["type"] in ("text", "tool_call"):
                         started = True
                     if event["type"] == "done":
-                        USAGE.add(cfg["id"], event.get("usage") or {})
+                        USAGE.add(cfg["id"], event.get("usage") or {}, client)
                     yield event
                 return
             except ProviderError as exc:

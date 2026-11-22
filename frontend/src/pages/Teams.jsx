@@ -113,7 +113,7 @@ function Profile({ db, setDb, team, go }) {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Stat label={tr("Оценка")} value={fmt(s.mean)} sub={`± ${fmt(s.sd)}`} />
+        <Stat label={tr("Оценка")} value={s.count ? fmt(s.mean) : "—"} sub={s.count ? `± ${fmt(s.sd)}` : tr("скаутинга нет")} />
         <Stat label={tr("Наблюдений")} value={s.count} sub={s.confidence} />
         <Stat label="OPR" value={teamOpr !== undefined ? fmt(teamOpr, 0) : "—"} sub={tr("по офиц. счетам")} />
         <Stat label={tr("Победы")} value={official.length ? `${wins}/${official.length}` : "—"} sub={tr("официально")} />
@@ -219,18 +219,23 @@ export default function Teams({ db, setDb, go, route }) {
   const [adding, setAdding] = useState(false);
   const [ranking, setRanking] = useState(false);
 
+  const oprMap = useMemo(() => computeOpr(db.schedule?.eventCode === db.meta.eventCode ? db.schedule.matches : []).opr, [db.schedule, db.meta.eventCode]);
+  const anyScouted = useMemo(() => db.records.some((r) => !db.meta.eventCode || r.eventCode === db.meta.eventCode), [db.records, db.meta.eventCode]);
+
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
+    const o = (s) => oprMap.get(s.team.number) ?? -Infinity;
     const rows = allStats(db)
       .filter((s) => !needle || `${s.team.number} ${s.team.name} ${s.team.region}`.toLowerCase().includes(needle))
       .filter((s) => filter === "all" || (filter === "none" ? !s.count : priority(s) === filter));
     const by = {
-      score: (a, b) => b.mean - a.mean,
-      matches: (a, b) => b.count - a.count || b.mean - a.mean,
+      // Scouted teams first by model score; unscouted ones (and an unscouted event) by official OPR.
+      score: (a, b) => (anyScouted ? Boolean(b.count) - Boolean(a.count) || (a.count && b.count ? b.mean - a.mean : o(b) - o(a)) : o(b) - o(a)),
+      matches: (a, b) => b.count - a.count || o(b) - o(a),
       number: (a, b) => Number(a.team.number) - Number(b.team.number) || a.team.number.localeCompare(b.team.number),
     }[sort];
     return rows.sort(by);
-  }, [db, q, filter, sort]);
+  }, [db, q, filter, sort, oprMap, anyScouted]);
 
   const team = route.param ? db.teams.find((t) => t.id === route.param) : null;
   if (team) return <Profile key={team.id} db={db} setDb={setDb} team={team} go={go} />;
@@ -296,7 +301,7 @@ export default function Teams({ db, setDb, go, route }) {
           <table className="w-full text-sm">
             <thead className="hidden bg-zinc-950 sm:table-header-group">
               <tr>
-                {[tr("Команда"), tr("Роль"), tr("Оценка"), tr("Матчи"), tr("Приоритет"), ""].map((h, i) => (
+                {[tr("Команда"), tr("Роль"), tr("Оценка"), "OPR", tr("Матчи"), tr("Приоритет"), ""].map((h, i) => (
                   <th key={i} className={th}>
                     {h}
                   </th>
@@ -310,13 +315,23 @@ export default function Teams({ db, setDb, go, route }) {
                     <div className="num font-medium text-white">{s.team.number}</div>
                     <div className="text-xs text-zinc-500">{s.team.name || "—"}</div>
                   </td>
-                  <td className="px-3 py-3 text-zinc-400 max-sm:hidden">{roleLabel(s)}</td>
+                  <td className="px-3 py-3 text-zinc-400 max-sm:hidden">{s.count ? roleLabel(s) : "—"}</td>
                   <td className="num px-3 py-3 max-sm:text-right">
-                    <span className="font-medium text-white">{fmt(s.mean)}</span> <span className="text-xs text-zinc-500">±{fmt(s.sd)}</span>
+                    {s.count ? (
+                      <>
+                        <span className="font-medium text-white">{fmt(s.mean)}</span> <span className="text-xs text-zinc-500">±{fmt(s.sd)}</span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-zinc-600">
+                        <span className="sm:hidden">{oprMap.has(s.team.number) ? `OPR ${fmt(oprMap.get(s.team.number), 0)}` : tr("скаутинга нет")}</span>
+                        <span className="hidden sm:inline">—</span>
+                      </span>
+                    )}
                   </td>
+                  <td className="num px-3 py-3 text-zinc-300 max-sm:hidden">{oprMap.has(s.team.number) ? fmt(oprMap.get(s.team.number), 0) : "—"}</td>
                   <td className="num px-3 py-3 text-zinc-400 max-sm:hidden">{s.count}</td>
                   <td className="px-3 py-3 max-sm:hidden">
-                    <Badge tone={priority(s) === "A" ? "strong" : "muted"}>{tr(priority(s))}</Badge>
+                    {s.count ? <Badge tone={priority(s) === "A" ? "strong" : "muted"}>{tr(priority(s))}</Badge> : <span className="text-zinc-600">—</span>}
                   </td>
                   <td className="px-3 py-3 text-right max-sm:hidden">
                     <Button

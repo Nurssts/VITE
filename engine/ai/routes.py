@@ -14,6 +14,7 @@ from . import service as ai
 from .prompts import scribe_system, strategist_system
 from .providers import ProviderError
 from .tools import TOOL_NAMES, declarations
+from ..security import client_ip
 
 log = logging.getLogger("vite.ai")
 MAX_HISTORY_CHARS = 300_000
@@ -60,6 +61,43 @@ class ExtractBody(BaseModel):
     lang: Literal["ru", "en"] = "ru"
 
 
+ANTHROPIC_BLOCKS = {"text", "thinking", "redacted_thinking", "tool_use"}
+
+
+def sanitize_raw(raw: dict[str, Any] | None) -> dict[str, Any] | None:
+    """`raw` is provider-native assistant content echoed back by the browser. Accept only the exact
+    shapes a provider produces for an ASSISTANT turn; anything else (e.g. a forged system/user
+    message that would override the server's instructions) is dropped."""
+    if not isinstance(raw, dict):
+        return None
+    provider = raw.get("provider")
+    if provider == "anthropic":
+        content = raw.get("content")
+        if isinstance(content, list) and content and all(isinstance(b, dict) and b.get("type") in ANTHROPIC_BLOCKS for b in content):
+            return {"provider": provider, "content": content}
+        return None
+    if isinstance(provider, str) and provider in {"gemini", "openai"}:
+        msg = raw.get("message")
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            return None
+        clean: dict[str, Any] = {"role": "assistant", "content": msg.get("content") if isinstance(msg.get("content"), str) else ""}
+        calls = msg.get("tool_calls")
+        if isinstance(calls, list):
+            safe = []
+            for c in calls[:8]:
+                fn = c.get("function") if isinstance(c, dict) else None
+                if not isinstance(fn, dict) or fn.get("name") not in TOOL_NAMES:
+                    return None
+                item = {"id": str(c.get("id", ""))[:120], "type": "function", "function": {"name": fn["name"], "arguments": str(fn.get("arguments", "{}"))[:8000]}}
+                if isinstance(c.get("extra_content"), dict):
+                    item["extra_content"] = c["extra_content"]
+                safe.append(item)
+            if safe:
+                clean["tool_calls"] = safe
+        return {"provider": provider, "message": clean}
+    return None
+
+
 def validate_history(messages: list[MessageIn]) -> list[dict[str, Any]]:
     if messages[0].role != "user":
         raise HTTPException(status_code=422, detail="The conversation must start with a user message.")
@@ -68,7 +106,9 @@ def validate_history(messages: list[MessageIn]) -> list[dict[str, Any]]:
         for c in m.toolCalls:
             if c.name not in TOOL_NAMES:
                 raise HTTPException(status_code=422, detail=f"Unknown tool: {c.name}")
-        out.append(m.model_dump())
+        item = m.model_dump()
+        item["raw"] = sanitize_raw(item.get("raw")) if m.role == "assistant" else None
+        out.append(item)
     if len(json.dumps(out, ensure_ascii=False)) > MAX_HISTORY_CHARS:
         raise HTTPException(status_code=413, detail="The conversation is too long. Start a new chat.")
     return out
@@ -104,7 +144,7 @@ def build_router(limiter) -> APIRouter:
 
         async def events():
             try:
-                async for event in ai.run_turn(system, history, declarations()):
+                async for event in ai.run_turn(system, history, declarations(), client=client_ip(request)):
                     yield ai.sse(event)
             except ProviderError as exc:
                 yield ai.sse({"type": "error", "message": str(exc), "retryable": exc.retryable, "status": exc.status})
@@ -124,7 +164,7 @@ def build_router(limiter) -> APIRouter:
         for _ in range(2):
             text, meta = "", {}
             try:
-                async for event in ai.run_turn(system, messages, [], json_mode=True):
+                async for event in ai.run_turn(system, messages, [], json_mode=True, client=client_ip(request)):
                     if event["type"] == "start":
                         meta = {}
                         text = ""

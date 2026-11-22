@@ -24,6 +24,7 @@ _HEADERS = {"Content-Type": "application/json", "Accept": "application/json", "U
 _client: httpx.AsyncClient | None = None
 _cache: dict[str, tuple[float, Any]] = {}
 _locks: dict[str, asyncio.Lock] = {}
+_CACHE_MAX = 400
 
 
 class FTCScoutError(RuntimeError):
@@ -78,6 +79,11 @@ async def cached(key: str, ttl: float, loader) -> Any:
         if hit and hit[0] > time.monotonic():
             return hit[1]
         value = await loader()
+        if len(_cache) >= _CACHE_MAX:  # bounded: many different event codes cannot grow memory forever
+            now = time.monotonic()
+            for k in [k for k, (exp, _) in _cache.items() if exp <= now] or list(_cache)[: _CACHE_MAX // 4]:
+                _cache.pop(k, None)
+                _locks.pop(k, None)
         _cache[key] = (time.monotonic() + ttl, value)
         return value
 

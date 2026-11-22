@@ -6,7 +6,8 @@ import { confirmDialog, toast } from "../components/feedback";
 import { aiStatus } from "../lib/ai/client";
 import { runAgent } from "../lib/ai/agent";
 import { aiStore } from "../lib/ai/memory";
-import { createToolbox } from "../lib/ai/tools";
+import { createToolbox, TOOL_KINDS } from "../lib/ai/tools";
+import { summarizeTool } from "../lib/ai/summaries";
 import { breakdown } from "../lib/model";
 import { useSpeech } from "../lib/ai/speech";
 import { getLang, tr } from "../lib/i18n";
@@ -35,6 +36,12 @@ export function toolLabel(name, args = {}) {
   return L[name] || name;
 }
 
+const TOOL_NAME_RE = new RegExp(`\`?\\b(${Object.keys(TOOL_KINDS).join("|")})\\b\`?`, "g");
+/** Replace internal tool identifiers (e.g. `get_scouting_gaps`) with readable labels. */
+export function humanizeToolNames(text) {
+  return String(text).replace(TOOL_NAME_RE, (_, name) => `«${toolLabel(name).trim()}»`);
+}
+
 function ActionPreview({ call }) {
   const a = call.args || {};
   if (call.name === "add_observation") {
@@ -57,24 +64,24 @@ function ActionPreview({ call }) {
     );
   }
   if (call.name === "save_team_note") return <p className="whitespace-pre-wrap text-xs text-zinc-300">“{a.note}”</p>;
+  if (call.name === "remember") return <p className="whitespace-pre-wrap text-xs text-zinc-300">“{a.fact}”</p>;
   return null;
 }
 
 function ToolRow({ call, result, pending }) {
   const status = pending ? "running" : result?.status || "done";
+  const summary = pending ? "" : summarizeTool(call.name, result);
   return (
-    <details className="group min-w-0 overflow-hidden rounded-lg border border-zinc-900 bg-black/40 text-xs">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-zinc-400">
-        {status === "running" ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : status === "error" ? <X size={13} aria-hidden="true" /> : status === "declined" ? <X size={13} aria-hidden="true" /> : <Check size={13} className="text-zinc-300" aria-hidden="true" />}
-        <span className="min-w-0 flex-1 truncate text-zinc-300">{toolLabel(call.name, call.args)}</span>
-        {result?.kind === "action" ? <Badge tone="outline">{status === "declined" ? tr("отклонено") : tr("действие")}</Badge> : null}
-        <ChevronRight size={13} className="transition-transform group-open:rotate-90" aria-hidden="true" />
-      </summary>
-      <div className="space-y-2 border-t border-zinc-900 px-3 py-2">
-        <pre className="overflow-x-auto whitespace-pre-wrap break-all text-[11px] text-zinc-500">{JSON.stringify(call.args)}</pre>
-        {result ? <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px] text-zinc-400">{result.content.slice(0, 3000)}</pre> : null}
-      </div>
-    </details>
+    <div className="flex min-w-0 items-start gap-2 rounded-lg border border-zinc-900 bg-black/40 px-3 py-2 text-xs">
+      <span className="mt-0.5 shrink-0 text-zinc-400">
+        {status === "running" ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : status === "error" || status === "declined" ? <X size={13} aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-zinc-300">{toolLabel(call.name, call.args)}</span>
+        {summary ? <span className="mt-0.5 block text-zinc-500">{summary}</span> : null}
+      </span>
+      {result?.kind === "action" ? <Badge tone="outline">{status === "declined" ? tr("отклонено") : tr("действие")}</Badge> : null}
+    </div>
   );
 }
 
@@ -98,7 +105,7 @@ function Message({ m, results, threadId, index, feedback, onCopy }) {
           ))}
         </div>
       ) : null}
-      {m.text ? <Markdown text={m.text} /> : m.streaming && !m.toolCalls?.length ? <TypingDots /> : null}
+      {m.text ? <Markdown text={humanizeToolNames(m.text)} /> : m.streaming && !m.toolCalls?.length ? <TypingDots /> : null}
       {m.stop === "refusal" ? <p className="text-xs text-zinc-500">{tr("Модель отказалась отвечать на этот запрос.")}</p> : null}
       {m.stop === "max_tokens" ? <p className="text-xs text-zinc-500">{tr("Ответ обрезан по лимиту длины.")}</p> : null}
       {!m.streaming && m.text ? (

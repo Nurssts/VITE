@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Search, Sparkles } from "lucide-react";
 import { Badge, Button, DemoBanner, EmptyState, inputClass, PageHeader, Panel, ProfileBars } from "../components/ui";
 import { confirmDialog } from "../components/feedback";
-import { denialPick, fmt, pairModel, roleLabel, stats, teamLabel } from "../lib/model";
+import { computeOpr, denialPick, fmt, pairModel, roleLabel, stats, teamLabel } from "../lib/model";
 import { tr } from "../lib/i18n";
 
 export default function Draft({ db, setDb, go }) {
@@ -13,15 +13,21 @@ export default function Draft({ db, setDb, go }) {
   const removed = (draft.removed || []).filter((id) => db.teams.some((t) => t.id === id));
   const partner = db.teams.find((t) => t.id === picked[0]);
 
+  const oprMap = useMemo(() => computeOpr(db.schedule?.eventCode === db.meta.eventCode ? db.schedule.matches : []).opr, [db.schedule, db.meta.eventCode]);
+  // Without any scouting the synergy model has nothing to compare: rank by official OPR instead.
+  const oprMode = !db.records.some((r) => !db.meta.eventCode || r.eventCode === db.meta.eventCode) && oprMap.size > 0;
   const candidates = useMemo(
     () =>
       db.teams
         .filter((t) => t.id !== cap?.id && !removed.includes(t.id) && !picked.includes(t.id))
-        .map((t) => ({ team: t, model: cap ? pairModel(db, cap.id, t.id) : null, st: stats(db, t) }))
-        .sort((a, b) => (b.model?.score || 0) - (a.model?.score || 0)),
-    [db, cap, removed.join(), picked.join()] // eslint-disable-line react-hooks/exhaustive-deps
+        .map((t) => ({ team: t, model: cap && !oprMode ? pairModel(db, cap.id, t.id) : null, st: stats(db, t), opr: oprMap.get(t.number) }))
+        .sort((a, b) => (oprMode ? (b.opr ?? -Infinity) - (a.opr ?? -Infinity) : (b.model?.score || 0) - (a.model?.score || 0))),
+    [db, cap, removed.join(), picked.join(), oprMode, oprMap] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const denial = useMemo(() => (cap ? denialPick(db, cap.id, candidates.map((c) => c.team)) : null), [db, cap, candidates]);
+  const denial = useMemo(
+    () => (cap ? (oprMode ? (candidates[0] ? { team: candidates[0].team, threat: candidates[0].opr || 0 } : null) : denialPick(db, cap.id, candidates.map((c) => c.team))) : null),
+    [db, cap, candidates, oprMode]
+  );
   const best = candidates[0];
   const pair = cap && partner ? pairModel(db, cap.id, partner.id) : null;
   const needle = q.trim().toLowerCase();
@@ -95,13 +101,17 @@ export default function Draft({ db, setDb, go }) {
 
           {cap ? (
             <Panel title={tr("Подсказки")}>
-              {best ? (
+              {best && oprMode ? (
+                <p className="text-sm leading-relaxed text-zinc-300">
+                  <span className="text-zinc-500">{tr("Сильнейший по OPR")}:</span> <strong className="text-white">{teamLabel(best.team)}</strong> · OPR {best.opr !== undefined ? fmt(best.opr, 0) : "—"}. {tr("Чтобы оценить совместимость ролей, нужен скаутинг.")}
+                </p>
+              ) : best ? (
                 <p className="text-sm leading-relaxed text-zinc-300">
                   <span className="text-zinc-500">{tr("Лучшая синергия в пуле")}:</span> <strong className="text-white">{teamLabel(best.team)}</strong> · {tr("индекс")} {Math.round(best.model?.score || 0)}.{" "}
                   {best.model?.complementaryRoles ? tr("Комплиментарные роли Hive/Flower.") : tr("Роли перекрываются — проверьте collision.")}
                 </p>
               ) : null}
-              {denial ? (
+              {denial && !oprMode ? (
                 <p className="mt-3 text-sm leading-relaxed text-zinc-300">
                   <span className="text-zinc-500">{tr("Denial pick (перехват)")}:</span> <strong className="text-white">{teamLabel(denial.team)}</strong> {tr("сильнее всего поднимает чужой альянс")} ({tr("угроза")} {Math.round(denial.threat)}). {tr("Берите, только если не нужен свой партнёр сильнее.")}
                 </p>
@@ -127,6 +137,7 @@ export default function Draft({ db, setDb, go }) {
             </div>
           </div>
           {!cap ? <p className="mb-3 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400">{tr("Выберите капитана — список отсортируется по синергии с ним.")}</p> : null}
+          {oprMode ? <p className="mb-3 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-400">{tr("Скаутинга ещё нет — список отсортирован по официальному OPR. Синергия ролей появится после первых наблюдений.")}</p> : null}
           <ol className="grid gap-2">
             {shown.map((x) => {
               const rank = candidates.indexOf(x) + 1;
@@ -140,10 +151,16 @@ export default function Draft({ db, setDb, go }) {
                       </button>
                       <span className="truncate text-zinc-400">{x.team.name}</span>
                       {rank === 1 && cap ? <Badge tone="strong">{tr("лучший")}</Badge> : null}
-                      {denial?.team.id === x.team.id ? <Badge tone="outline">denial</Badge> : null}
+                      {!oprMode && denial?.team.id === x.team.id ? <Badge tone="outline">denial</Badge> : null}
                     </div>
                     <div className="mt-0.5 text-xs text-zinc-500">
-                      {roleLabel(x.st)} · {tr("синергия")} <span className="num text-zinc-300">{x.model ? Math.round(x.model.score) : "—"}</span> · {tr("вклад пары")} <span className="num text-zinc-300">{x.model ? fmt(x.model.mean, 0) : "—"}</span> · {x.st.count} {tr("набл.")}
+                      {x.st.count ? `${roleLabel(x.st)} · ` : ""}
+                      {x.model && x.st.count ? (
+                        <>
+                          {tr("синергия")} <span className="num text-zinc-300">{Math.round(x.model.score)}</span> · {tr("вклад пары")} <span className="num text-zinc-300">{fmt(x.model.mean, 0)}</span> ·{" "}
+                        </>
+                      ) : null}
+                      OPR <span className="num text-zinc-300">{x.opr !== undefined ? fmt(x.opr, 0) : "—"}</span> · {x.st.count} {tr("набл.")}
                     </div>
                     {x.team.notes ? <div className="mt-1 truncate text-xs text-zinc-600">{x.team.notes}</div> : null}
                   </div>
