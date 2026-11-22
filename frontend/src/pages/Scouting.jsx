@@ -41,7 +41,7 @@ function teamForStation(schedule, matchNo, station) {
   return side[idx] || "";
 }
 
-export default function Scouting({ db, setDb, go, route }) {
+export default function Scouting({ db, setDb, go, route, prefs = {} }) {
   const editing = route.param ? db.records.find((r) => r.id === route.param) : null;
   const schedule = db.schedule?.eventCode === db.meta.eventCode ? db.schedule : null;
   const byNumber = useMemo(() => new Map(db.teams.map((t) => [t.number, t])), [db.teams]);
@@ -54,7 +54,7 @@ export default function Scouting({ db, setDb, go, route }) {
   function initialForm() {
     if (editing) return { ...blank, ...editing };
     const q = route.query || {};
-    const lastScout = sessionStorage.getItem("vite-scout-name") || "";
+    const lastScout = sessionStorage.getItem("vite-scout-name") || prefs.displayName || "";
     const matchNo = q.match || "";
     const fromStation = byNumber.get(teamForStation(schedule, matchNo, sessionStorage.getItem(STATION_KEY)))?.id;
     return { ...blank, teamId: q.team || fromStation || db.teams[0]?.id || "", matchNo, eventCode: db.meta.eventCode || "", date: today(), confidence: "medium", scout: lastScout };

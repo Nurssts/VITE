@@ -197,6 +197,7 @@ export default function Strategist({ db, setDb, lang, go, route, prefs, setPrefs
       observations: d.records.length,
       officialScheduleLoaded: Boolean(d.schedule),
       myTeam: prefsRef.current.myTeam || null,
+      myRole: prefsRef.current.myRole || null,
       scoutNotesShared: prefsRef.current.aiShareNotes !== false,
     };
   }, []);
